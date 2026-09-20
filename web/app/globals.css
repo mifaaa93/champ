@@ -1,0 +1,152 @@
+:root {
+  --bg: #07080c;
+  --bg-2: #0e1118;
+  --panel: rgba(16, 19, 27, 0.78);
+  --line: rgba(224, 180, 90, 0.22);
+  --gold: #e0b45a;
+  --gold-2: #a07830;
+  --ink: #efece3;
+  --muted: #8d8b83;
+  --up: #3ee0a0;
+  --down: #ff6b7d;
+  --shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; min-height: 100%; }
+body {
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(224, 180, 90, 0.12), transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, rgba(62, 224, 160, 0.06), transparent 50%),
+    linear-gradient(180deg, #0b0d12 0%, var(--bg) 40%, #05060a 100%);
+  color: var(--ink);
+}
+a { color: inherit; text-decoration: none; }
+button, input { font: inherit; }
+
+.wrap { width: min(1120px, calc(100% - 32px)); margin: 0 auto; }
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 0 8px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  backdrop-filter: blur(14px);
+}
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: "Syne", sans-serif;
+  letter-spacing: 0.08em;
+}
+.brand b { color: var(--gold); font-size: 22px; }
+.brand span { color: var(--muted); font-size: 12px; letter-spacing: 0.22em; }
+.nav-links { display: flex; gap: 18px; color: var(--muted); font-size: 14px; }
+.nav-links a:hover { color: var(--gold); }
+.cta {
+  border: 1px solid var(--gold);
+  color: var(--bg);
+  background: linear-gradient(180deg, #f0d08a, var(--gold));
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-weight: 700;
+  box-shadow: 0 0 24px rgba(224, 180, 90, 0.25);
+}
+.cta.ghost {
+  background: transparent;
+  color: var(--gold);
+}
+
+.hero { padding: 48px 0 24px; display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 32px; }
+.kicker {
+  color: var(--gold-2);
+  letter-spacing: 0.28em;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+h1, h2, h3 { font-family: "Syne", sans-serif; margin: 8px 0 12px; }
+h1 { font-size: clamp(40px, 6vw, 72px); line-height: 0.95; }
+.lead { color: var(--muted); font-size: 18px; max-width: 46ch; }
+
+.clock {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: var(--shadow);
+}
+.clock .digits {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 42px;
+  color: var(--gold);
+  letter-spacing: 0.06em;
+}
+.clock small { color: var(--muted); }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.card {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 18px;
+  padding: 18px;
+}
+.card h3 { margin-top: 0; }
+.table { width: 100%; border-collapse: collapse; }
+.table th, .table td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  font-size: 14px;
+}
+.table th { color: var(--muted); font-weight: 500; font-size: 12px; letter-spacing: 0.08em; }
+.mono { font-family: "IBM Plex Mono", monospace; }
+.up { color: var(--up); }
+.down { color: var(--down); }
+.podium { display: grid; grid-template-columns: 1fr 1.1fr 1fr; gap: 10px; align-items: end; margin: 24px 0; }
+.pod {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 16px;
+  min-height: 120px;
+}
+.pod.gold { min-height: 160px; border-color: var(--gold); }
+.form { display: grid; gap: 12px; max-width: 420px; }
+label { color: var(--muted); font-size: 13px; }
+input {
+  background: #0b0d12;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 12px 14px;
+  border-radius: 12px;
+}
+.note { color: var(--muted); font-size: 14px; }
+.footer { color: var(--muted); padding: 48px 0 28px; font-size: 13px; }
+.live { display: inline-flex; align-items: center; gap: 8px; color: var(--up); font-size: 12px; letter-spacing: 0.16em; }
+.live i {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--up);
+  box-shadow: 0 0 12px var(--up); display: block;
+}
+.tabs { display: flex; gap: 8px; margin: 12px 0 18px; }
+.tab {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.tab.on { color: var(--bg); background: var(--gold); border-color: var(--gold); }
+.err { color: var(--down); }
+.ok { color: var(--up); }
+
+@media (max-width: 860px) {
+  .hero, .grid-2, .podium { grid-template-columns: 1fr; }
+  .nav { flex-wrap: wrap; gap: 10px; }
+  .clock .digits { font-size: 32px; }
+}
