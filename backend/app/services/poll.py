@@ -8,13 +8,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ledger import (
+    ZERO,
     MoneyPoint,
+    SnapRef,
     basis,
     contest_pnl,
     delta_bonuses,
     delta_deposits,
     delta_withdrawals,
     money,
+    pick_start_snapshot,
     return_pct,
     trading_pnl,
 )
@@ -129,42 +132,65 @@ async def snapshot_uid(session: AsyncSession, uid: int, day: date | None = None)
         session.add(led)
         await session.flush()
 
-    if led.start_snapshot_id is None:
-        led.start_snapshot_id = snap.id
-        led.start_balance = snap.balance
-
-    start_snap = await session.get(Snapshot, led.start_snapshot_id)
-    if start_snap is None:
-        start_snap = snap
-        led.start_snapshot_id = snap.id
-        led.start_balance = snap.balance
-
-    start = MoneyPoint(
-        balance=start_snap.balance,
-        sum_deposits=start_snap.sum_deposits,
-        sum_withdrawals=start_snap.sum_withdrawals,
-        sum_bonuses=start_snap.sum_bonuses,
+    cfg = await get_settings(session)
+    min_dep = money(cfg["min_day_deposit"])
+    day_snaps = list(
+        (
+            await session.execute(
+                select(Snapshot)
+                .where(Snapshot.uid == uid, Snapshot.day == day)
+                .order_by(Snapshot.ts.asc(), Snapshot.id.asc())
+            )
+        ).scalars()
+    )
+    picked = pick_start_snapshot(
+        [SnapRef(s.id, s.sum_deposits, s.balance) for s in day_snaps],
+        min_dep,
+        money(led.stats_depo_sum),
     )
     now = _point_from_info(info)
+    opening = day_snaps[0] if day_snaps else snap
+    if picked is None:
+        led.start_snapshot_id = None
+        led.start_balance = ZERO
+        led.day_deposits = max(
+            money(led.stats_depo_sum), now.sum_deposits - opening.sum_deposits
+        )
+        led.day_withdrawals = now.sum_withdrawals - opening.sum_withdrawals
+        led.day_bonuses = ZERO
+        led.contest_pnl = ZERO
+        led.trading_pnl = ZERO
+        led.basis = ZERO
+        led.return_pct = ZERO
+    else:
+        start_snap = next(s for s in day_snaps if s.id == picked.id)
+        led.start_snapshot_id = start_snap.id
+        led.start_balance = start_snap.balance
+        start = MoneyPoint(
+            balance=start_snap.balance,
+            sum_deposits=start_snap.sum_deposits,
+            sum_withdrawals=start_snap.sum_withdrawals,
+            sum_bonuses=start_snap.sum_bonuses,
+        )
+        led.day_deposits = delta_deposits(start, now)
+        led.day_withdrawals = delta_withdrawals(start, now)
+        led.day_bonuses = delta_bonuses(start, now)
+        led.contest_pnl = contest_pnl(start, now)
+        led.trading_pnl = trading_pnl(start, now)
+        led.basis = basis(start, now)
+        led.return_pct = return_pct(led.contest_pnl, led.basis)
+
     led.last_snapshot_id = snap.id
     led.last_balance = now.balance
     led.status = snap.status
     led.self_excluded = snap.self_excluded
-    led.day_deposits = delta_deposits(start, now)
-    led.day_withdrawals = delta_withdrawals(start, now)
-    led.day_bonuses = delta_bonuses(start, now)
-    led.contest_pnl = contest_pnl(start, now)
-    led.trading_pnl = trading_pnl(start, now)
-    led.basis = basis(start, now)
-    led.return_pct = return_pct(led.contest_pnl, led.basis)
     led.registered = True
     if abs(led.day_deposits - led.stats_depo_sum) > RECONCILE_THRESHOLD and led.stats_depo_sum > 0:
         led.reconcile_flag = True
     else:
         led.reconcile_flag = False
 
-    cfg = await get_settings(session)
-    _recompute_eligibility(led, money(cfg["min_day_deposit"]), bool(cfg["require_trade"]))
+    _recompute_eligibility(led, min_dep, bool(cfg["require_trade"]))
     await session.commit()
     return snap
 

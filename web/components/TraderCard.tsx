@@ -173,7 +173,7 @@ export function TraderCard({ data, canEdit }: { data: TraderPayload; canEdit: bo
             </p>
             <p className="note">
               Доходность считает PnL с выводом (вывел — место падает). Просадка считает только
-              торговлю. Точка 0 — первый снимок, не 00:00.
+              торговлю. Точка 0 — первый снимок после депозита дня, не полночь.
             </p>
           </article>
           <article className="card">

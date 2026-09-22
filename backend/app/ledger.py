@@ -16,6 +16,34 @@ def money(value: object) -> Decimal:
 
 
 @dataclass(frozen=True)
+class SnapRef:
+    id: int
+    sum_deposits: Decimal
+    balance: Decimal
+
+
+def pick_start_snapshot(
+    snaps: list[SnapRef], min_dep: Decimal, stats_depo: Decimal
+) -> SnapRef | None:
+    """First snapshot that already includes today's qualifying deposit.
+
+    If the buy-in is already inside the first snapshot of the day (deposited
+    before we woke), that first snapshot is t0. If leftover capital is
+    snapshotted first, t0 moves to the first snap where cumulative deposits
+    since that opening reach min_dep.
+    """
+    if not snaps:
+        return None
+    opening = snaps[0]
+    for snap in snaps:
+        if snap.sum_deposits - opening.sum_deposits >= min_dep:
+            return snap
+    if stats_depo >= min_dep:
+        return opening
+    return None
+
+
+@dataclass(frozen=True)
 class MoneyPoint:
     balance: Decimal
     sum_deposits: Decimal

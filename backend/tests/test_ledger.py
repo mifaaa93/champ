@@ -2,9 +2,11 @@ from decimal import Decimal
 
 from app.ledger import (
     MoneyPoint,
+    SnapRef,
     basis,
     contest_pnl,
     loss_compensation,
+    pick_start_snapshot,
     return_pct,
     trading_pnl,
 )
@@ -45,6 +47,28 @@ def test_zero_start_uses_deposit_as_basis():
     start, now = P(0, dep=0), P(80, dep=50)
     assert basis(start, now) == Decimal("50")
     assert contest_pnl(start, now) == Decimal("30")
+
+
+def test_t0_after_deposit_not_leftover():
+    leftover = SnapRef(1, Decimal("1034"), Decimal("1.27"))
+    after = SnapRef(2, Decimal("1084"), Decimal("51.27"))
+    picked = pick_start_snapshot([leftover, after], Decimal("50"), Decimal("50"))
+    assert picked is not None
+    assert picked.id == 2
+    assert picked.balance == Decimal("51.27")
+
+
+def test_t0_first_snap_if_deposit_already_inside():
+    first = SnapRef(1, Decimal("500"), Decimal("520"))
+    later = SnapRef(2, Decimal("500"), Decimal("510"))
+    picked = pick_start_snapshot([first, later], Decimal("50"), Decimal("80"))
+    assert picked is not None
+    assert picked.id == 1
+
+
+def test_t0_none_without_qualifying_deposit():
+    only = SnapRef(1, Decimal("100"), Decimal("1.27"))
+    assert pick_start_snapshot([only], Decimal("50"), Decimal("0")) is None
 
 
 def test_loss_comp_cap():
