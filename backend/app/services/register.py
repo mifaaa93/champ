@@ -19,11 +19,11 @@ async def register_participant(
     try:
         info = await partners_client.user_info(uid)
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="Partners API недоступен") from exc
+        raise HTTPException(status_code=502, detail="Проверка UID временно недоступна") from exc
     if not info:
         raise HTTPException(
             status_code=404,
-            detail="UID не найден в нашем партнёрском контуре Pocket Option",
+            detail="UID не найден. Проверь номер счёта.",
         )
 
     nick = (nickname or "").strip()[:64]

@@ -10,7 +10,9 @@ class RankRow:
     nickname: str
     last_balance: Decimal
     contest_pnl: Decimal
+    trading_pnl: Decimal
     return_pct: Decimal
+    trading_return_pct: Decimal
     day_deposits: Decimal
     day_withdrawals: Decimal
     day_bonuses: Decimal
@@ -25,7 +27,7 @@ def sort_yield(rows: list[RankRow]) -> list[RankRow]:
 
 
 def sort_loss(rows: list[RankRow]) -> list[RankRow]:
-    return sorted(rows, key=lambda r: (r.contest_pnl, r.return_pct, r.uid))
+    return sorted(rows, key=lambda r: (r.trading_pnl, r.trading_return_pct, r.uid))
 
 
 def eligible_only(rows: list[RankRow]) -> list[RankRow]:
@@ -42,7 +44,7 @@ def pick_winners(
     live = eligible_only(rows)
     a = sort_yield(live)[:places]
     a_uids = {r.uid for r in a}
-    b_pool = [r for r in sort_loss(live) if r.uid not in a_uids and r.contest_pnl < ZERO]
+    b_pool = [r for r in sort_loss(live) if r.uid not in a_uids and r.trading_pnl < ZERO]
     b = b_pool[:places]
 
     a_out = []
@@ -63,16 +65,16 @@ def pick_winners(
     b_out = []
     for i, row in enumerate(b):
         pct = money(prize_loss_pct[i]) if i < len(prize_loss_pct) else ZERO
-        amount = loss_compensation(row.contest_pnl, pct, loss_cap)
+        amount = loss_compensation(row.trading_pnl, pct, loss_cap)
         b_out.append(
             {
                 "place": i + 1,
                 "uid": row.uid,
                 "nickname": row.nickname,
-                "metric": row.contest_pnl,
-                "pnl": row.contest_pnl,
+                "metric": row.trading_pnl,
+                "pnl": row.trading_pnl,
                 "prize_amount": amount,
-                "prize_note": f"{pct}% от просадки, кап ${loss_cap}",
+                "prize_note": f"{pct}% от торговой просадки, кап ${loss_cap}",
             }
         )
     return {"yield": a_out, "loss": b_out}

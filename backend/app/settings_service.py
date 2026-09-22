@@ -4,16 +4,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AppSetting
 
+from app.telegram import DEFAULT_TEMPLATES
+
 DEFAULTS: dict = {
-    "timezone": "Asia/Dubai",
+    "timezone": "Africa/Johannesburg",
     "top_n": 7,
     "min_day_deposit": 50,
     "publish_interval_minutes": 60,
+    "min_return_pct": 0,
     "prize_yield": [100, 50, 25],
     "prize_loss_pct": [15, 10, 5],
     "loss_comp_cap": 500,
     "require_trade": False,
     "prize_places": 3,
+    **DEFAULT_TEMPLATES,
 }
 
 SETTINGS_KEY = "championship"
@@ -28,6 +32,17 @@ async def get_settings(session: AsyncSession) -> dict:
         await session.refresh(row)
     merged = deepcopy(DEFAULTS)
     merged.update(row.value or {})
+    changed = False
+    if merged.get("timezone") != "Africa/Johannesburg":
+        merged["timezone"] = "Africa/Johannesburg"
+        changed = True
+    for key, value in list(merged.items()):
+        if isinstance(value, str) and "Dubai" in value:
+            merged[key] = value.replace("Asia/Dubai", "UTC+2").replace("Dubai", "UTC+2")
+            changed = True
+    if changed:
+        row.value = merged
+        await session.commit()
     return merged
 
 

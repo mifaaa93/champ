@@ -1,7 +1,8 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ledger import money
+from app.ledger import money, return_pct
+from app.schemas import day_cash
 from app.models import DayLedger, DayResult, Participant
 from app.services.ranking import RankRow, pick_winners
 from app.settings_service import get_settings
@@ -24,9 +25,11 @@ async def load_rank_rows(session: AsyncSession, day) -> list[RankRow]:
                 nickname=(p.nickname if p and p.nickname else ""),
                 last_balance=led.last_balance,
                 contest_pnl=led.contest_pnl,
+                trading_pnl=led.trading_pnl,
                 return_pct=led.return_pct,
-                day_deposits=led.day_deposits,
-                day_withdrawals=led.day_withdrawals,
+                trading_return_pct=return_pct(led.trading_pnl, led.basis),
+                day_deposits=day_cash(led.day_deposits, led.stats_depo_sum),
+                day_withdrawals=day_cash(led.day_withdrawals, led.stats_wdrw_sum),
                 day_bonuses=led.day_bonuses,
                 basis=led.basis,
                 eligible=led.eligible,

@@ -3,13 +3,17 @@ from decimal import Decimal
 from app.services.ranking import RankRow, pick_winners, sort_loss, sort_yield
 
 
-def row(uid, pct, pnl, eligible=True) -> RankRow:
+def row(uid, pct, pnl, eligible=True, trading=None) -> RankRow:
+    pnl_d = Decimal(str(pnl))
+    trading_d = Decimal(str(trading)) if trading is not None else pnl_d
     return RankRow(
         uid=uid,
         nickname="",
         last_balance=Decimal("100"),
-        contest_pnl=Decimal(str(pnl)),
+        contest_pnl=pnl_d,
+        trading_pnl=trading_d,
         return_pct=Decimal(str(pct)),
+        trading_return_pct=trading_d,
         day_deposits=Decimal("50"),
         day_withdrawals=Decimal("0"),
         day_bonuses=Decimal("0"),
@@ -24,9 +28,24 @@ def test_yield_sorts_desc():
     assert [r.uid for r in sort_yield(rows)] == [2, 1, 3]
 
 
-def test_loss_sorts_most_negative_first():
+def test_loss_sorts_most_negative_trading_first():
     rows = [row(1, -10, -10), row(2, -80, -80), row(3, 5, 5)]
     assert [r.uid for r in sort_loss(rows)][0] == 2
+
+
+def test_withdrawal_does_not_win_loss_nomination():
+    green = row(9, 50, 50)
+    withdrawn = row(1, -90, -90, trading=0)
+    real_loss = row(2, -20, -20, trading=-20)
+    winners = pick_winners(
+        [green, withdrawn, real_loss],
+        places=1,
+        prize_yield=[100],
+        prize_loss_pct=[15],
+        loss_cap=Decimal("500"),
+    )
+    assert [w["uid"] for w in winners["yield"]] == [9]
+    assert [w["uid"] for w in winners["loss"]] == [2]
 
 
 def test_winner_exclusion_and_ineligible():

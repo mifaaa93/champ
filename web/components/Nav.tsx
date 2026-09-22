@@ -4,8 +4,8 @@ export function Nav() {
   return (
     <header className="nav wrap">
       <Link className="brand" href="/">
-        <b>IB CUP</b>
-        <span>DUBAI TIME</span>
+        <b>CHAMP</b>
+        <span>UTC+2</span>
       </Link>
       <nav className="nav-links">
         <Link href="/rating">Рейтинг</Link>

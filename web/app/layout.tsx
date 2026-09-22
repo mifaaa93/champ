@@ -3,8 +3,8 @@ import { Nav } from "@/components/Nav";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "IB CUP — чемпионат по трейдингу",
-  description: "Дневной чемпионат IvanBots среди трейдеров Pocket Option. Dubai time.",
+  title: "Чемпионат по трейдингу",
+  description: "Дневной чемпионат среди трейдеров Pocket Option. UTC+2.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -21,7 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Nav />
         {children}
         <footer className="footer wrap">
-          IB CUP · сутки по Dubai (UTC+4) · рейтинг строится по снимкам баланса Partners API
+          Сутки по UTC+2 · рейтинг по балансу счёта
         </footer>
       </body>
     </html>

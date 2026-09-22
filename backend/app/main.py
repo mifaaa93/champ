@@ -25,7 +25,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="IB CUP API", version=__version__, lifespan=lifespan)
+app = FastAPI(title="Championship API", version=__version__, lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"],
