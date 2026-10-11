@@ -160,6 +160,7 @@ class PublishLog(Base):
 class ShowcaseLead(Base):
     __tablename__ = "showcase_leads"
 
+    board: Mapped[str] = mapped_column(String(1), primary_key=True, default="A", server_default="A")
     place: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(64), default="")
     dep: Mapped[Decimal] = mapped_column(Money, default=0)

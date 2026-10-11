@@ -3,8 +3,11 @@ import random
 
 from app.services.event import (
     board_totals,
+    combined_totals,
     dummy_live_events,
+    dummy_uid,
     merge_board,
+    merge_nomination,
     min_event_deposit,
     neighbor_window,
     nudge_amount,
@@ -12,7 +15,10 @@ from app.services.event import (
     pick_dummy_name,
     season_dep_from_points,
     sort_by_dep,
+    sort_by_loss,
+    sort_by_yield,
     turnover_from_info,
+    visible_nominations,
 )
 from app.schemas import EventRegisterIn, SettingsPatch
 from pydantic import ValidationError
@@ -155,3 +161,67 @@ def test_pick_dummy_name_avoids_taken():
     rng = random.Random(2)
     name = pick_dummy_name("Ахмед", {"Ахмед", "Равшан"}, rng)
     assert name not in {"Ахмед", "Равшан"}
+
+
+def test_yield_board_ranks_by_return_and_keeps_real_on_tie():
+    board = merge_nomination(
+        [
+            {"place": 1, "name": "Ахмед", "dep": 1000, "pnl": 100, "return_pct": 10},
+            {"place": 2, "name": "Тимур", "dep": 1000, "pnl": 50, "return_pct": 5},
+        ],
+        [{"uid": 141917235, "name": "Тест", "dep": 80, "pnl": 40, "return_pct": 10}],
+        "A",
+    )
+    assert [r["name"] for r in board] == ["Ахмед", "Тест", "Тимур"]
+    tied = merge_nomination(
+        [{"place": 1, "name": "Ахмед", "dep": 1000, "pnl": 100, "return_pct": 10}],
+        [{"uid": 141917235, "name": "Тест", "dep": 80, "pnl": 100, "return_pct": 10}],
+        "A",
+    )
+    assert [r["name"] for r in tied] == ["Тест", "Ахмед"]
+    assert tied[0]["dummy"] is False
+    assert dummy_uid(1, "A") == -1
+
+
+def test_loss_board_ranks_biggest_loss_and_skips_profit():
+    board = merge_nomination(
+        [
+            {"place": 1, "name": "Нурлан", "dep": 1000, "pnl": -500, "return_pct": -20},
+            {"place": 2, "name": "Ерлан", "dep": 1000, "pnl": -100, "return_pct": -5},
+        ],
+        [
+            {"uid": 141917235, "name": "Плюс", "dep": 80, "pnl": 40, "return_pct": 10},
+            {"uid": 141917236, "name": "Минус", "dep": 90, "pnl": -250, "return_pct": -12},
+        ],
+        "B",
+    )
+    assert [r["name"] for r in board] == ["Нурлан", "Минус", "Ерлан"]
+    assert dummy_uid(1, "B") == -101
+    ranked = sort_by_loss(
+        [
+            {"uid": 1, "pnl": -10, "dummy": False},
+            {"uid": 2, "pnl": -40, "dummy": True},
+        ]
+    )
+    assert [r["uid"] for r in ranked] == [2, 1]
+    assert sort_by_yield([{"uid": 1, "return_pct": 1, "pnl": 1}, {"uid": 2, "return_pct": 9, "pnl": 1}])[0]["uid"] == 2
+
+
+def test_visible_nominations_fallback_when_both_off():
+    assert visible_nominations({"show_nomination_a": False, "show_nomination_b": True}) == (False, True)
+    assert visible_nominations({"show_nomination_a": False, "show_nomination_b": False}) == (True, True)
+
+
+def test_combined_totals_count_real_once():
+    a = [{"uid": -1, "dummy": True, "dep": 100, "turn": 10}, {"uid": 5, "dummy": False, "dep": 50, "turn": 5}]
+    b = [{"uid": -101, "dummy": True, "dep": 80, "turn": 8}, {"uid": 5, "dummy": False, "dep": 50, "turn": 5}]
+    players, deposits, turnover = combined_totals([a, b])
+    assert players == 3
+    assert deposits == 230
+    assert turnover == 23
+
+
+def test_settings_accepts_nomination_flags():
+    patch = SettingsPatch(show_nomination_a=True, show_nomination_b=False)
+    assert patch.show_nomination_a is True
+    assert patch.show_nomination_b is False

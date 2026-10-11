@@ -22,6 +22,8 @@ DEFAULTS: dict = {
     "event_end": "",
     "event_min_deposit": 50,
     "dummy_tick_minutes": 1,
+    "show_nomination_a": True,
+    "show_nomination_b": True,
     "prize_pool": 5000,
     "prize_table": [
         {"place": "1 место", "amount": 1500, "suffix": ""},
@@ -39,9 +41,9 @@ DEFAULTS: dict = {
     "rami_url": "https://t.me/rami_username",
     "event_rules": [
         "Турнир открыт для участников команды.",
-        "Рейтинг сезона считается по депозиту с начала таймера до его конца.",
+        "Топ A — максимальная доходность %. Топ B — максимальная потеря $.",
         "В рейтинг попадают участники с депозитом от $50 за сезон.",
-        "Доходность и просадка дня — открытые метрики того же чемпионата.",
+        "Доходность и потеря считаются по текущим суткам UTC+2.",
         "Оборот учитывается за последние 30 дней активности, если данные есть в базе.",
         "Топ-10 витрины и призовой фонд задаются в админке.",
         "В случае споров решение организатора является окончательным.",
@@ -98,6 +100,22 @@ async def get_settings(session: AsyncSession) -> dict:
     if merged.get("dummy_tick_minutes") is None:
         merged["dummy_tick_minutes"] = 1
         changed = True
+    if merged.get("show_nomination_a") is None:
+        merged["show_nomination_a"] = True
+        changed = True
+    if merged.get("show_nomination_b") is None:
+        merged["show_nomination_b"] = True
+        changed = True
+    rule_swap = {
+        "Рейтинг сезона считается по депозиту с начала таймера до его конца.": "Топ A — максимальная доходность %. Топ B — максимальная потеря $.",
+        "Доходность и просадка дня — открытые метрики того же чемпионата.": "Доходность и потеря считаются по текущим суткам UTC+2.",
+    }
+    rules = merged.get("event_rules")
+    if isinstance(rules, list):
+        rewritten = [rule_swap.get(str(item), item) for item in rules]
+        if rewritten != rules:
+            merged["event_rules"] = rewritten
+            changed = True
     from app.config import settings as env_settings
 
     if not str(merged.get("tg_bot_token") or "").strip() and env_settings.tg_bot_token:

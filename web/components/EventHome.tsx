@@ -16,7 +16,7 @@ type TopRow = {
   return_pct?: number;
   dummy?: boolean;
 };
-type Activity = { name: string; action: string; rank?: number | null; extra?: string; time?: string };
+type Activity = { name: string; action: string; rank?: number | null; extra?: string; time?: string; scope?: string };
 type Neighbor = { rank: number; uid: number; name: string; dep: number; is_you: boolean; dummy?: boolean };
 type MetricRow = { place: number; name: string; pct: number; pnl: number };
 type Profile = {
@@ -33,6 +33,8 @@ type Profile = {
   neighbors: Neighbor[];
   in_ranking?: boolean;
   need_deposit?: number;
+  rank_a?: number;
+  rank_b?: number;
 };
 type EventData = {
   name: string;
@@ -48,16 +50,22 @@ type EventData = {
   rules: string[];
   activity: Activity[];
   top: TopRow[];
+  top_a?: TopRow[];
+  top_b?: TopRow[];
+  show_a?: boolean;
+  show_b?: boolean;
   metrics?: { day: string; yield: MetricRow[]; loss: MetricRow[] };
 };
 
 function money(n: number) {
-  if (Math.abs(n) >= 1_000_000) {
-    const m = n / 1_000_000;
+  const sign = n < 0 ? "-" : "";
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) {
+    const m = abs / 1_000_000;
     const s = m % 1 === 0 ? m.toFixed(0) : m.toFixed(1);
-    return `$${s}M`;
+    return `${sign}$${s}M`;
   }
-  return `$${Math.round(n).toLocaleString("en-US")}`;
+  return `${sign}$${Math.round(abs).toLocaleString("en-US")}`;
 }
 
 function pad(n: number) {
@@ -69,12 +77,20 @@ function pct(n: number) {
   return `${sign}${n.toFixed(1)}%`;
 }
 
+function scopeLabel(scope?: string) {
+  if (scope === "A") return " · доходность";
+  if (scope === "B") return " · потери";
+  return null;
+}
+
 function activityLine(act: Activity) {
+  const scope = scopeLabel(act.scope);
   if (act.action === "обогнал" && act.extra) {
     return (
       <>
         <b>{act.name}</b> обогнал <b>{act.extra}</b>
         {act.rank ? <> и поднялся на <b>#{act.rank}</b></> : null}
+        {scope}
       </>
     );
   }
@@ -82,6 +98,7 @@ function activityLine(act: Activity) {
     return (
       <>
         <b>{act.name}</b> поднялся на <b>#{act.rank}</b> место
+        {scope}
       </>
     );
   }
@@ -89,6 +106,7 @@ function activityLine(act: Activity) {
     return (
       <>
         <b>{act.name}</b> занял <b>#{act.rank}</b> место
+        {scope}
       </>
     );
   }
@@ -97,6 +115,7 @@ function activityLine(act: Activity) {
       <b>{act.name}</b> {act.action}{" "}
       {act.rank ? <b>#{act.rank}</b> : null}
       {act.extra ? <b> {act.extra}</b> : null}
+      {scope}
     </>
   );
 }
@@ -156,6 +175,7 @@ export function EventHome() {
   const [clock, setClock] = useState({ d: "00", h: "00", m: "00", s: "00" });
   const [shareCopied, setShareCopied] = useState(false);
   const [lookupErr, setLookupErr] = useState("");
+  const [board, setBoard] = useState<"A" | "B">("A");
 
   const load = useCallback(async () => {
     const res = await fetch(apiPath("/public/event"), { cache: "no-store" });
@@ -205,23 +225,29 @@ export function EventHome() {
     return () => window.clearInterval(id);
   }, [data?.event_end]);
 
+  const showA = data?.show_a !== false;
+  const showB = data?.show_b !== false;
+  const activeBoard: "A" | "B" = board === "B" && showB ? "B" : showA ? "A" : "B";
+
   const top3 = useMemo(() => {
-    const t = data?.top || [];
+    const t = activeBoard === "B" ? data?.top_b || [] : data?.top_a || data?.top || [];
     return {
       first: t.find((x) => x.place === 1),
       second: t.find((x) => x.place === 2),
       third: t.find((x) => x.place === 3),
       rest: t.filter((x) => x.place >= 4),
     };
-  }, [data]);
+  }, [data, activeBoard]);
 
   const rami = data?.rami_url || "https://t.me/rami_username";
   const channel = data?.telegram_channel_url || "https://t.me/your_channel";
   const minDep = data?.min_deposit || 50;
   const shareUrl =
     typeof window !== "undefined" && profile ? `${window.location.origin}/?ref=${profile.uid}` : "";
+  const shareRank =
+    activeBoard === "B" ? profile?.rank_b || 0 : profile?.rank_a || profile?.rank || 0;
   const shareText = profile
-    ? `Я в чемпионате! Моё место: ${profile.in_ranking === false || profile.rank === 0 ? "пока вне рейтинга" : `#${profile.rank}`}, депозит: ${money(profile.dep)}. Сможешь обогнать?`
+    ? `Я в чемпионате! Моё место ${activeBoard === "B" ? "по потерям" : "по доходности"}: ${profile.in_ranking === false || shareRank === 0 ? "пока вне этого топа" : `#${shareRank}`}, депозит: ${money(profile.dep)}. Сможешь обогнать?`
     : "";
 
   async function applyProfile(you: Profile, status?: string) {
@@ -323,6 +349,8 @@ export function EventHome() {
   function card(row: TopRow | undefined, cls: string, rankText: string, crown: boolean) {
     if (!row) return null;
     const pnl = row.pnl || 0;
+    const loss = row.loss || Math.max(0, -pnl);
+    const onLoss = activeBoard === "B";
     return (
       <div className={`top-card ${cls}`}>
         {crown ? <div className="crown">👑</div> : null}
@@ -341,8 +369,10 @@ export function EventHome() {
             <div className="stat-val turnover">{money(row.turn)}</div>
           </div>
           <div className="stat-box">
-            <div className="stat-label-small">Прибыль</div>
-            <div className={`stat-val ${pnl >= 0 ? "profit" : "loss"}`}>{money(pnl)}</div>
+            <div className="stat-label-small">{onLoss ? "Потеря" : "Прибыль"}</div>
+            <div className={`stat-val ${onLoss || pnl < 0 ? "loss" : "profit"}`}>
+              {money(onLoss ? loss : pnl)}
+            </div>
           </div>
           <div className="stat-box">
             <div className="stat-label-small">Доходность</div>
@@ -380,7 +410,7 @@ export function EventHome() {
 
         <div className="countdown-section">
           <div className="countdown-label">До конца чемпионата осталось</div>
-          <div className="countdown-sublabel">Время UTC+2 • рейтинг по депу сезона с начала таймера</div>
+          <div className="countdown-sublabel">Время UTC+2 • вход от ${minDep} депозита за сезон</div>
           <div className="countdown-timer">
             <div className="countdown-item">
               <div className="countdown-value">{clock.d}</div>
@@ -443,7 +473,24 @@ export function EventHome() {
           </div>
         ) : null}
 
-        <h2 className="section-title">ТОП-10 ЛИДЕРОВ ЧЕМПИОНАТА</h2>
+        <h2 className="section-title">
+          {activeBoard === "B" ? "ТОП-10 ПО ПОТЕРЯМ" : "ТОП-10 ПО ДОХОДНОСТИ"}
+        </h2>
+        {showA && showB ? (
+          <div className="board-switch">
+            <button type="button" className={`board-tab${activeBoard === "A" ? " active-a" : ""}`} onClick={() => setBoard("A")}>
+              Доходность %
+            </button>
+            <button type="button" className={`board-tab${activeBoard === "B" ? " active-b" : ""}`} onClick={() => setBoard("B")}>
+              Потери $
+            </button>
+          </div>
+        ) : null}
+        <p className="board-note">
+          {activeBoard === "B"
+            ? "Номинация B: кто потерял больше. Компенсация считается от этой потери."
+            : "Номинация A: максимальная доходность. В топ входят участники с депозитом сезона от $" + minDep + "."}
+        </p>
         <div className="top3-grid">
           {card(top3.second, "second", "2 МЕСТО", false)}
           {card(top3.first, "first", "1 МЕСТО", true)}
@@ -453,22 +500,26 @@ export function EventHome() {
           <div className="table-header">
             <div>Место</div>
             <div>Трейдер</div>
+            <div style={{ textAlign: "right" }}>{activeBoard === "B" ? "Потеря" : "Доходность"}</div>
             <div style={{ textAlign: "right" }}>Депозит</div>
             <div style={{ textAlign: "right" }}>Оборот</div>
-            <div style={{ textAlign: "right" }}>Прибыль</div>
-            <div style={{ textAlign: "right" }}>Потеря</div>
+            <div style={{ textAlign: "right" }}>{activeBoard === "B" ? "Доходность" : "Прибыль"}</div>
           </div>
           {top3.rest.map((row) => (
-            <div className="table-row" key={row.place}>
+            <div className="table-row" key={`${activeBoard}-${row.place}`}>
               <div className="row-rank">{row.place}</div>
               <div>
                 <div className="row-name">{row.name}</div>
                 <div className="row-id">{row.dummy === false ? "LIVE" : "ID: HIDDEN"}</div>
               </div>
+              <div className={`row-val ${activeBoard === "B" ? "loss" : (row.return_pct || 0) >= 0 ? "profit" : "loss"}`}>
+                {activeBoard === "B" ? money(row.loss || Math.max(0, -(row.pnl || 0))) : pct(row.return_pct || 0)}
+              </div>
               <div className="row-val deposit">{money(row.dep)}</div>
               <div className="row-val turnover">{money(row.turn)}</div>
-              <div className="row-val profit">{money(Math.max(0, row.pnl || 0))}</div>
-              <div className="row-val loss">{money(row.loss || Math.max(0, -(row.pnl || 0)))}</div>
+              <div className={`row-val ${activeBoard === "B" ? ((row.return_pct || 0) >= 0 ? "profit" : "loss") : "profit"}`}>
+                {activeBoard === "B" ? pct(row.return_pct || 0) : money(Math.max(0, row.pnl || 0))}
+              </div>
             </div>
           ))}
         </div>
@@ -571,12 +622,24 @@ export function EventHome() {
             ) : null}
             <div className="stats-card">
               <h3>Ваша статистика</h3>
-              <div className="stat-row">
-                <span className="stat-label">Место в рейтинге</span>
-                <span className="stat-value" style={{ color: "var(--neon-gold)" }}>
-                  {profile.in_ranking === false || profile.rank === 0 ? "вне рейтинга" : `#${profile.rank}`}
-                </span>
-              </div>
+              {showA ? (
+                <div className="stat-row">
+                  <span className="stat-label">Место по доходности</span>
+                  <span className="stat-value" style={{ color: "var(--neon-green)" }}>
+                    {profile.in_ranking === false || !(profile.rank_a || profile.rank)
+                      ? "вне топа"
+                      : `#${profile.rank_a || profile.rank}`}
+                  </span>
+                </div>
+              ) : null}
+              {showB ? (
+                <div className="stat-row">
+                  <span className="stat-label">Место по потерям</span>
+                  <span className="stat-value loss">
+                    {profile.in_ranking === false || !profile.rank_b ? "вне топа" : `#${profile.rank_b}`}
+                  </span>
+                </div>
+              ) : null}
               <div className="stat-row">
                 <span className="stat-label">UID</span>
                 <span className="stat-value id">{profile.uid}</span>

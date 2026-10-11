@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 
 type PrizeRow = { place: string; amount: number; suffix?: string };
+type BoardKey = "A" | "B";
+
 type ShowcaseRow = {
   place: number;
   name: string;
@@ -30,6 +32,8 @@ type EventForm = {
   prize_loss_pct: number[];
   loss_comp_cap: number;
   prize_places: number;
+  show_nomination_a: boolean;
+  show_nomination_b: boolean;
 };
 
 export type EventSection = "top" | "prizes" | "params";
@@ -42,7 +46,8 @@ function toLocalInput(iso: string) {
 }
 
 function money(n: number) {
-  return `$${Math.round(n).toLocaleString("en-US")}`;
+  const sign = n < 0 ? "-" : "";
+  return `${sign}$${Math.round(Math.abs(n)).toLocaleString("en-US")}`;
 }
 
 function emptyRow(place: number): ShowcaseRow {
@@ -66,6 +71,22 @@ function placeClass(i: number) {
   return "default";
 }
 
+function packRows(rows: ShowcaseRow[]) {
+  const byPlace = new Map(rows.map((r) => [r.place, r]));
+  return Array.from({ length: 10 }, (_, i) => {
+    const place = i + 1;
+    const row = byPlace.get(place);
+    return row ? { ...emptyRow(place), ...row, place, randomize: row.randomize !== false } : emptyRow(place);
+  });
+}
+
+function visibilityText(showA: boolean, showB: boolean) {
+  if (showA && showB) return "Показывать оба топа с переключением вкладок";
+  if (showA) return "Показывать только номинацию A (доходность)";
+  if (showB) return "Показывать только номинацию B (потери)";
+  return "Оба топа выключены — на сайте останутся оба, с вкладками";
+}
+
 function intervalLabel(minutes: number) {
   const m = Number(minutes) || 1;
   const seconds = Math.round(m * 60);
@@ -87,7 +108,8 @@ export function EventPanel({
   section: EventSection;
 }) {
   const [form, setForm] = useState<EventForm | null>(null);
-  const [top, setTop] = useState<ShowcaseRow[]>([]);
+  const [tops, setTops] = useState<Record<BoardKey, ShowcaseRow[]>>({ A: [], B: [] });
+  const [board, setBoard] = useState<BoardKey>("A");
   const [edit, setEdit] = useState<ShowcaseRow | null>(null);
   const [busy, setBusy] = useState("");
   const [addUid, setAddUid] = useState("");
@@ -97,7 +119,10 @@ export function EventPanel({
     void (async () => {
       try {
         const s = (await adminFetch("/admin/settings")) as Record<string, unknown>;
-        const sc = (await adminFetch("/admin/showcase")) as { rows: ShowcaseRow[] };
+        const sc = (await adminFetch("/admin/showcase")) as {
+          rows: ShowcaseRow[];
+          boards?: { A?: ShowcaseRow[]; B?: ShowcaseRow[] };
+        };
         if (dead) return;
         const prize_places = Number(s.prize_places || 3);
         const prize_yield = ((s.prize_yield as number[]) || []).slice();
@@ -117,14 +142,12 @@ export function EventPanel({
           prize_yield,
           prize_loss_pct,
           loss_comp_cap: Number(s.loss_comp_cap || 0),
+          show_nomination_a: s.show_nomination_a !== false,
+          show_nomination_b: s.show_nomination_b !== false,
         });
-        setTop(
-          (sc.rows || []).map((r) => ({
-            ...emptyRow(r.place),
-            ...r,
-            randomize: r.randomize !== false,
-          })),
-        );
+        const packedA = packRows(sc.boards?.A || sc.rows || []);
+        const packedB = packRows(sc.boards?.B || []);
+        setTops({ A: packedA, B: packedB });
       } catch (e) {
         if (!dead) onError(e instanceof Error ? e.message : "не загрузилось");
       }
@@ -178,6 +201,8 @@ export function EventPanel({
         prize_yield: form.prize_yield.map((n) => Number(n)),
         prize_loss_pct: form.prize_loss_pct.map((n) => Number(n)),
         loss_comp_cap: Number(form.loss_comp_cap),
+        show_nomination_a: form.show_nomination_a,
+        show_nomination_b: form.show_nomination_b,
       });
       onStatus("Параметры чемпионата сохранены");
     } catch (err) {
@@ -187,24 +212,34 @@ export function EventPanel({
     }
   }
 
+  function rowsPayload(rows: ShowcaseRow[]) {
+    return rows.map((r) => ({
+      place: r.place,
+      name: r.name,
+      dep: Number(r.dep),
+      turn: Number(r.turn),
+      balance: Number(r.balance),
+      pnl: Number(r.pnl),
+      return_pct: Number(r.return_pct),
+      uid: r.uid || null,
+      randomize: r.randomize !== false,
+    }));
+  }
+
   async function saveTop() {
     setBusy("top");
     onError("");
     try {
-      await adminFetch("/admin/showcase", "PUT", {
-        rows: top.map((r) => ({
-          place: r.place,
-          name: r.name,
-          dep: Number(r.dep),
-          turn: Number(r.turn),
-          balance: Number(r.balance),
-          pnl: Number(r.pnl),
-          return_pct: Number(r.return_pct),
-          uid: r.uid || null,
-          randomize: r.randomize !== false,
-        })),
-      });
-      onStatus("Топ-10 сохранён");
+      const saved = (await adminFetch("/admin/showcase", "PUT", {
+        boards: { A: rowsPayload(tops.A), B: rowsPayload(tops.B) },
+      })) as { boards?: { A?: ShowcaseRow[]; B?: ShowcaseRow[] } };
+      if (saved.boards) {
+        setTops({
+          A: packRows(saved.boards.A || tops.A),
+          B: packRows(saved.boards.B || tops.B),
+        });
+      }
+      onStatus("Оба топа сохранены");
     } catch (err) {
       onError(err instanceof Error ? err.message : "ошибка");
     } finally {
@@ -213,7 +248,10 @@ export function EventPanel({
   }
 
   function patchRow(place: number, patch: Partial<ShowcaseRow>) {
-    setTop((prev) => prev.map((r) => (r.place === place ? { ...r, ...patch } : r)));
+    setTops((prev) => ({
+      ...prev,
+      [board]: prev[board].map((r) => (r.place === place ? { ...r, ...patch } : r)),
+    }));
   }
 
   function patchPrize(i: number, patch: Partial<PrizeRow>) {
@@ -226,6 +264,8 @@ export function EventPanel({
   }
 
   const intervalSec = Math.round((Number(form.dummy_tick_minutes) || 1) * 60);
+  const top = tops[board];
+  const lossBoard = board === "B";
 
   if (section === "top") {
     return (
@@ -233,19 +273,32 @@ export function EventPanel({
         <div className="page-header">
           <div>
             <h1 className="page-title">Редактор Топ-10</h1>
-            <div className="page-subtitle">🎲 Включите рандомизацию для «живого» эффекта на сайте</div>
+            <div className="page-subtitle">🎲 Оба топа настраиваются отдельно, включая рандомизацию каждой строки</div>
           </div>
           <div className="header-actions">
             <button className="btn btn-success" type="button" onClick={() => void saveTop()} disabled={busy === "top"}>
-              {busy === "top" ? "Сохраняем…" : "💾 Сохранить"}
+              {busy === "top" ? "Сохраняем…" : "💾 Сохранить оба"}
             </button>
           </div>
         </div>
+        <div className="board-switch">
+          <button type="button" className={`board-tab${board === "A" ? " active-a" : ""}`} onClick={() => setBoard("A")}>
+            Номинация A · доходность %
+          </button>
+          <button type="button" className={`board-tab${board === "B" ? " active-b" : ""}`} onClick={() => setBoard("B")}>
+            Номинация B · потеря $
+          </button>
+        </div>
         <div className="card">
           <div className="card-header">
-            <div className="card-title">🏆 Текущий Топ-10</div>
+            <div className="card-title">{lossBoard ? "📉 Топ-10 потерь" : "📈 Топ-10 доходности"}</div>
             <span className="card-badge badge-live">● Редактируемый</span>
           </div>
+          <p className="form-hint" style={{ margin: "0 0 12px" }}>
+            {lossBoard
+              ? "Рандомизация держит прибыль отрицательной, чтобы строка оставалась в топе потерь."
+              : "Рандомизация держит прибыль положительной. Карандаш правит имя, депозит, оборот, прибыль и доходность."}
+          </p>
           <div className="table-container">
             <table className="data-table">
               <thead>
@@ -255,7 +308,7 @@ export function EventPanel({
                   <th>Имя</th>
                   <th>Депозит</th>
                   <th>Баланс</th>
-                  <th>Прибыль</th>
+                  <th>{lossBoard ? "Потеря" : "Прибыль"}</th>
                   <th>Доходность</th>
                   <th>🎲 Рандом</th>
                   <th>Действия</th>
@@ -363,7 +416,7 @@ export function EventPanel({
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Прибыль ($)</label>
+                  <label className="form-label">{lossBoard ? "Прибыль ($), для потерь со знаком −" : "Прибыль ($)"}</label>
                   <input
                     className="form-input"
                     type="number"
@@ -523,7 +576,7 @@ export function EventPanel({
       <div className="page-header">
         <div>
           <h1 className="page-title">⚙️ Параметры чемпионата</h1>
-          <div className="page-subtitle">Длительность, интервалы, рандомизация</div>
+          <div className="page-subtitle">Длительность, интервалы, видимость топов</div>
         </div>
         <button className="btn btn-success" type="button" onClick={() => void saveSettings()} disabled={busy === "set"}>
           {busy === "set" ? "Сохраняем…" : "💾 Сохранить все"}
@@ -633,6 +686,43 @@ export function EventPanel({
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+      </div>
+      <div className="card">
+        <div className="card-header">
+          <div className="card-title">👁️ Видимость топов на сайте</div>
+          <span className="card-badge badge-live">● Управляемые дашборды</span>
+        </div>
+        <div className="visibility-card">
+          <h3>Выберите, какие номинации показывать</h3>
+          <div className="visibility-row">
+            <div className="info">
+              <div className="name" style={{ color: "var(--neon-green)" }}>📈 Номинация A</div>
+              <div className="desc">Топ по максимальной доходности %</div>
+            </div>
+            <button
+              type="button"
+              className={`toggle-switch${form.show_nomination_a ? " active" : ""}`}
+              aria-label="номинация A"
+              onClick={() => setForm({ ...form, show_nomination_a: !form.show_nomination_a })}
+            />
+          </div>
+          <div className="visibility-row">
+            <div className="info">
+              <div className="name" style={{ color: "var(--neon-red)" }}>📉 Номинация B</div>
+              <div className="desc">Топ по максимальной потере $ (компенсация)</div>
+            </div>
+            <button
+              type="button"
+              className={`toggle-switch${form.show_nomination_b ? " active" : ""}`}
+              aria-label="номинация B"
+              onClick={() => setForm({ ...form, show_nomination_b: !form.show_nomination_b })}
+            />
+          </div>
+          <div className="config-display">
+            <div className="label">Текущая конфигурация:</div>
+            <div className="value">{visibilityText(form.show_nomination_a, form.show_nomination_b)}</div>
           </div>
         </div>
       </div>

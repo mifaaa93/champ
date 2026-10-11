@@ -711,6 +711,81 @@ html.admin-root .toggle-switch.active::after {
   left: 27px;
 }
 
+html.admin-root .board-switch {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+html.admin-root .board-tab {
+  flex: 1;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.3);
+  color: var(--text-dim);
+  font-family: Orbitron, sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+}
+html.admin-root .board-tab.active-a {
+  color: var(--neon-green);
+  border-color: rgba(0, 255, 136, 0.45);
+  background: rgba(0, 255, 136, 0.08);
+}
+html.admin-root .board-tab.active-b {
+  color: var(--neon-red);
+  border-color: rgba(255, 71, 87, 0.45);
+  background: rgba(255, 71, 87, 0.08);
+}
+html.admin-root .visibility-card {
+  background: rgba(0, 243, 255, 0.05);
+  border: 1px solid rgba(0, 243, 255, 0.2);
+  border-radius: 14px;
+  padding: 25px;
+}
+html.admin-root .visibility-card h3 {
+  font-family: Orbitron, sans-serif;
+  font-size: 16px;
+  color: var(--neon-cyan);
+  margin: 0 0 20px;
+}
+html.admin-root .visibility-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 15px 20px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+html.admin-root .visibility-row .name {
+  font-family: Orbitron, sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+}
+html.admin-root .visibility-row .desc {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+html.admin-root .config-display {
+  margin-top: 20px;
+  padding: 15px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+}
+html.admin-root .config-display .label {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+html.admin-root .config-display .value {
+  font-family: Orbitron, sans-serif;
+  font-size: 14px;
+  color: var(--neon-cyan);
+}
+
 html.admin-root .prize-editor-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

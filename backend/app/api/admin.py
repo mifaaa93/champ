@@ -50,15 +50,28 @@ async def patch_settings(
 
 @router.get("/showcase", dependencies=[Depends(require_admin)])
 async def get_showcase(session: AsyncSession = Depends(get_session)) -> dict:
-    return {"rows": await list_showcase(session)}
+    rows_a = await list_showcase(session, "A")
+    rows_b = await list_showcase(session, "B")
+    return {"rows": rows_a, "boards": {"A": rows_a, "B": rows_b}}
 
 
 @router.put("/showcase", dependencies=[Depends(require_admin)])
 async def put_showcase(
     body: ShowcaseIn, session: AsyncSession = Depends(get_session)
 ) -> dict:
-    rows = await save_showcase(session, body.rows)
-    return {"rows": rows}
+    saved: dict[str, list] = {}
+    if body.boards:
+        for key in ("A", "B"):
+            rows = body.boards.get(key)
+            if rows is None:
+                continue
+            saved[key] = await save_showcase(session, rows, key)
+    else:
+        code = "B" if str(body.board or "A").upper() == "B" else "A"
+        saved[code] = await save_showcase(session, body.rows, code)
+    rows_a = saved.get("A") or await list_showcase(session, "A")
+    rows_b = saved.get("B") or await list_showcase(session, "B")
+    return {"rows": rows_a, "boards": {"A": rows_a, "B": rows_b}}
 
 
 @router.post("/snapshot", dependencies=[Depends(require_admin)])

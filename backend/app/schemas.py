@@ -83,6 +83,8 @@ class SettingsPatch(BaseModel):
     activity: list[dict] | None = None
     tg_bot_token: str | None = Field(default=None, max_length=200)
     tg_chat_id: str | None = Field(default=None, max_length=80)
+    show_nomination_a: bool | None = None
+    show_nomination_b: bool | None = None
 
     @field_validator("prize_yield")
     @classmethod
@@ -133,7 +135,9 @@ class EventRegisterIn(BaseModel):
 
 
 class ShowcaseIn(BaseModel):
-    rows: list[dict]
+    rows: list[dict] = []
+    board: str | None = Field(default=None, max_length=1)
+    boards: dict | None = None
 
 
 def dec(value: Decimal | int | float | None) -> float:

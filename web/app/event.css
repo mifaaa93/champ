@@ -269,6 +269,39 @@ html.po-root body {
 .stat-val.deposit { color: var(--neon-cyan); }
 .stat-val.turnover { color: var(--neon-purple); }
 
+.po .board-switch {
+  display: flex;
+  gap: 10px;
+  margin: 0 0 18px;
+}
+.po .board-tab {
+  flex: 1;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--text-dim);
+  font-family: Orbitron, sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+}
+.po .board-tab.active-a {
+  color: var(--neon-green);
+  border-color: rgba(0, 255, 136, 0.45);
+  background: rgba(0, 255, 136, 0.08);
+}
+.po .board-tab.active-b {
+  color: var(--neon-red);
+  border-color: rgba(255, 71, 87, 0.45);
+  background: rgba(255, 71, 87, 0.08);
+}
+.po .board-note {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 13px;
+  margin: -8px 0 18px;
+}
+
 .rest-top-table {
   background: var(--bg-card); border: 1px solid var(--glass-border);
   border-radius: 20px; overflow: hidden; margin-bottom: 40px;
