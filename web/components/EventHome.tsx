@@ -6,31 +6,49 @@ import { apiPath } from "@/lib/api";
 import "@/app/event.css";
 
 type PrizeRow = { place: string; amount: number; suffix?: string };
-type TopRow = { place: number; name: string; dep: number; turn: number; dummy?: boolean };
+type TopRow = {
+  place: number;
+  name: string;
+  dep: number;
+  turn: number;
+  pnl?: number;
+  loss?: number;
+  return_pct?: number;
+  dummy?: boolean;
+};
 type Activity = { name: string; action: string; rank?: number | null; extra?: string; time?: string };
 type Neighbor = { rank: number; uid: number; name: string; dep: number; is_you: boolean; dummy?: boolean };
+type MetricRow = { place: number; name: string; pct: number; pnl: number };
 type Profile = {
   uid: number;
   name: string;
   rank: number;
   dep: number;
   turn: number;
+  balance?: number;
+  pnl?: number;
+  return_pct?: number;
   beaten: number;
   total: number;
   neighbors: Neighbor[];
+  in_ranking?: boolean;
+  need_deposit?: number;
 };
 type EventData = {
   name: string;
   event_end: string;
+  min_deposit?: number;
   prize_pool: number;
   prize_table: PrizeRow[];
   stats_players: number;
+  stats_deposits?: number;
   stats_turnover: number;
   telegram_channel_url: string;
   rami_url: string;
   rules: string[];
   activity: Activity[];
   top: TopRow[];
+  metrics?: { day: string; yield: MetricRow[]; loss: MetricRow[] };
 };
 
 function money(n: number) {
@@ -46,17 +64,17 @@ function pad(n: number) {
   return String(n).padStart(2, "0");
 }
 
+function pct(n: number) {
+  const sign = n > 0 ? "+" : "";
+  return `${sign}${n.toFixed(1)}%`;
+}
+
 function activityLine(act: Activity) {
   if (act.action === "обогнал" && act.extra) {
     return (
       <>
         <b>{act.name}</b> обогнал <b>{act.extra}</b>
-        {act.rank ? (
-          <>
-            {" "}
-            и поднялся на <b>#{act.rank}</b>
-          </>
-        ) : null}
+        {act.rank ? <> и поднялся на <b>#{act.rank}</b></> : null}
       </>
     );
   }
@@ -67,14 +85,17 @@ function activityLine(act: Activity) {
       </>
     );
   }
+  if (act.action === "занял место" && act.rank) {
+    return (
+      <>
+        <b>{act.name}</b> занял <b>#{act.rank}</b> место
+      </>
+    );
+  }
   return (
     <>
       <b>{act.name}</b> {act.action}{" "}
-      {act.rank ? (
-        <>
-          <b>#{act.rank}</b>
-        </>
-      ) : null}
+      {act.rank ? <b>#{act.rank}</b> : null}
       {act.extra ? <b> {act.extra}</b> : null}
     </>
   );
@@ -127,7 +148,7 @@ export function EventHome() {
   const [uid, setUid] = useState("");
   const [busy, setBusy] = useState(false);
   const [modal, setModal] = useState<
-    null | "format" | "missing" | "name" | "prizes" | "rules" | "share"
+    null | "format" | "missing" | "name" | "prizes" | "rules" | "share" | "need_deposit"
   >(null);
   const [regName, setRegName] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -144,6 +165,8 @@ export function EventHome() {
 
   useEffect(() => {
     void load().catch(() => setData(null));
+    const id = window.setInterval(() => void load().catch(() => {}), 30000);
+    return () => window.clearInterval(id);
   }, [load]);
 
   useEffect(() => {
@@ -185,17 +208,16 @@ export function EventHome() {
 
   const rami = data?.rami_url || "https://t.me/rami_username";
   const channel = data?.telegram_channel_url || "https://t.me/your_channel";
+  const minDep = data?.min_deposit || 50;
   const shareUrl =
-    typeof window !== "undefined" && profile
-      ? `${window.location.origin}/?ref=${profile.uid}`
-      : "";
+    typeof window !== "undefined" && profile ? `${window.location.origin}/?ref=${profile.uid}` : "";
   const shareText = profile
-    ? `Я в турнире! Моё место: #${profile.rank}, депозит: ${money(profile.dep)}. Сможешь обогнать?`
+    ? `Я в чемпионате! Моё место: ${profile.in_ranking === false || profile.rank === 0 ? "пока вне рейтинга" : `#${profile.rank}`}, депозит: ${money(profile.dep)}. Сможешь обогнать?`
     : "";
 
-  async function applyProfile(you: Profile) {
+  async function applyProfile(you: Profile, status?: string) {
     setProfile(you);
-    setModal(null);
+    setModal(status === "need_deposit" ? "need_deposit" : null);
     void load().catch(() => {});
     requestAnimationFrame(() => {
       document.getElementById("result-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -231,8 +253,9 @@ export function EventHome() {
         setModal("name");
         return;
       }
-      if (st === "ok" && (body as { you?: Profile }).you) {
-        await applyProfile((body as { you: Profile }).you);
+      const you = (body as { you?: Profile }).you;
+      if ((st === "ok" || st === "need_deposit") && you) {
+        await applyProfile(you, st);
         return;
       }
       setLookupErr("Не удалось найти результат. Попробуй ещё раз.");
@@ -264,7 +287,8 @@ export function EventHome() {
         return;
       }
       const you = (body as { you?: Profile }).you;
-      if (you) await applyProfile(you);
+      const st = (body as { status?: string }).status;
+      if (you) await applyProfile(you, st);
     } catch {
       setLookupErr("Не удалось сохранить имя. Попробуй ещё раз.");
       setModal(null);
@@ -278,7 +302,7 @@ export function EventHome() {
     setShareCopied(false);
     if (typeof navigator !== "undefined" && navigator.share) {
       try {
-        await navigator.share({ title: data?.name || "Турнир", text: shareText, url: shareUrl });
+        await navigator.share({ title: data?.name || "Чемпионат", text: shareText, url: shareUrl });
         return;
       } catch (e) {
         if ((e as { name?: string }).name === "AbortError") return;
@@ -287,39 +311,56 @@ export function EventHome() {
     setModal("share");
   }
 
-  function card(row: TopRow | undefined, cls: string, medal: string, rankText: string, crown: boolean) {
+  function card(row: TopRow | undefined, cls: string, rankText: string, crown: boolean) {
     if (!row) return null;
+    const pnl = row.pnl || 0;
     return (
       <div className={`top-card ${cls}`}>
         {crown ? <div className="crown">👑</div> : null}
         <div className="avatar-wrapper">
           <div className="initials-avatar">{row.name.charAt(0).toUpperCase()}</div>
         </div>
-        <div className="bot-name">
-          {medal ? <span className="medal-badge">{medal}</span> : null}
-          {row.name}
-        </div>
+        <div className="bot-name">{row.name}</div>
         <div className="bot-rank">{rankText}</div>
         <div className="bot-stats">
           <div className="stat-box">
-            <div className="stat-label-small">Деп</div>
-            <div className="stat-val">{money(row.dep)}</div>
+            <div className="stat-label-small">Депозит</div>
+            <div className="stat-val deposit">{money(row.dep)}</div>
           </div>
           <div className="stat-box">
             <div className="stat-label-small">Оборот</div>
-            <div className="stat-val">{money(row.turn)}</div>
+            <div className="stat-val turnover">{money(row.turn)}</div>
+          </div>
+          <div className="stat-box">
+            <div className="stat-label-small">Прибыль</div>
+            <div className={`stat-val ${pnl >= 0 ? "profit" : "loss"}`}>{money(pnl)}</div>
+          </div>
+          <div className="stat-box">
+            <div className="stat-label-small">Доходность</div>
+            <div className={`stat-val ${(row.return_pct || 0) >= 0 ? "profit" : "loss"}`}>
+              {pct(row.return_pct || 0)}
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
+  const activity = data?.activity || [];
+  const yRows = data?.metrics?.yield || [];
+  const lRows = data?.metrics?.loss || [];
+  const showMetrics = yRows.length > 0 || lRows.length > 0;
+
   return (
     <div className="po">
+      <div className="live-indicator">
+        <span className="dot" />
+        LIVE • обновление каждые 30 сек
+      </div>
       <div className="container">
         <header className="po-header">
-          <div className="logo">⚡ {data?.name || "PO TOURNAMENT"}</div>
-          <div className="prize-badge">ПРИЗОВОЙ ФОНД: {money(data?.prize_pool || 0)}</div>
+          <div className="logo">⚡ {data?.name || "PO CHAMPIONSHIP"}</div>
+          <div className="prize-badge">ПРИЗОВОЙ ПУЛ: {money(data?.prize_pool || 0)}</div>
         </header>
 
         {invite ? (
@@ -329,7 +370,8 @@ export function EventHome() {
         ) : null}
 
         <div className="countdown-section">
-          <div className="countdown-label">⏰ До конца турнира осталось</div>
+          <div className="countdown-label">До конца чемпионата осталось</div>
+          <div className="countdown-sublabel">Время UTC+2 • рейтинг по депу сезона с начала таймера</div>
           <div className="countdown-timer">
             <div className="countdown-item">
               <div className="countdown-value">{clock.d}</div>
@@ -360,62 +402,104 @@ export function EventHome() {
           </div>
           <div className="live-stat">
             <div className="live-stat-value" style={{ color: "var(--neon-purple)" }}>
-              {money(data?.stats_turnover || 0)}
+              {money(data?.stats_deposits || 0)}
             </div>
-            <div className="live-stat-label">Общий оборот</div>
+            <div className="live-stat-label">Депозитов за сезон</div>
           </div>
           <div className="live-stat">
             <div className="live-stat-value" style={{ color: "var(--neon-gold)" }}>
-              {money(data?.prize_pool || 0)}
+              Топ-10
             </div>
-            <div className="live-stat-label">Призовой фонд</div>
+            <div className="live-stat-label">Глубина рейтинга</div>
           </div>
         </div>
 
-        <div className="activity-feed">
-          <div className="activity-header">
-            <div className="activity-title">
-              <span className="live-dot" />
-              ПОСЛЕДНИЕ ДЕЙСТВИЯ
-            </div>
-            <div style={{ fontSize: 11, color: "var(--text-dim)" }}>Обновляется в реальном времени</div>
-          </div>
-          <div className="activity-list">
-            {(data?.activity || []).slice(0, 8).map((act, i) => (
-              <div className="activity-item" key={`${act.name}-${act.action}-${i}`}>
-                <span className="activity-avatar">👤</span>
-                <span className="activity-text">{activityLine(act)}</span>
-                <span className="activity-time">{act.time}</span>
+        {activity.length ? (
+          <div className="activity-feed">
+            <div className="activity-header">
+              <div className="activity-title">
+                <span className="live-dot" />
+                ПОСЛЕДНИЕ ДЕЙСТВИЯ
               </div>
-            ))}
+              <div style={{ fontSize: 11, color: "var(--text-dim)" }}>Живые события рейтинга</div>
+            </div>
+            <div className="activity-list">
+              {activity.slice(0, 6).map((act, i) => (
+                <div className="activity-item" key={`${act.name}-${act.action}-${i}`}>
+                  <span className="activity-text">{activityLine(act)}</span>
+                  <span className="activity-time">{act.time}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
 
-        <h2 className="section-title">🔥 ЭЛИТА СЕТИ: ТОП-10 ЛИДОВ СЕЗОНА</h2>
+        <h2 className="section-title">ТОП-10 ЛИДЕРОВ ЧЕМПИОНАТА</h2>
         <div className="top3-grid">
-          {card(top3.second, "second", "🥈", "2 МЕСТО", false)}
-          {card(top3.first, "first", "", "1 МЕСТО", true)}
-          {card(top3.third, "third", "🥉", "3 МЕСТО", false)}
+          {card(top3.second, "second", "2 МЕСТО", false)}
+          {card(top3.first, "first", "1 МЕСТО", true)}
+          {card(top3.third, "third", "3 МЕСТО", false)}
         </div>
-        <div className="rest-top10">
+        <div className="rest-top-table">
+          <div className="table-header">
+            <div>Место</div>
+            <div>Трейдер</div>
+            <div style={{ textAlign: "right" }}>Депозит</div>
+            <div style={{ textAlign: "right" }}>Оборот</div>
+            <div style={{ textAlign: "right" }}>Прибыль</div>
+            <div style={{ textAlign: "right" }}>Потеря</div>
+          </div>
           {top3.rest.map((row) => (
-            <div className="mini-card" key={row.place}>
-              <div className="rank">{row.place}</div>
-              <div className="info">
-                <div className="name">{row.name}</div>
-                <div className="id">{row.dummy === false ? "LIVE" : "ID: HIDDEN"}</div>
+            <div className="table-row" key={row.place}>
+              <div className="row-rank">{row.place}</div>
+              <div>
+                <div className="row-name">{row.name}</div>
+                <div className="row-id">{row.dummy === false ? "LIVE" : "ID: HIDDEN"}</div>
               </div>
-              <div className="dep">{money(row.dep)}</div>
+              <div className="row-val deposit">{money(row.dep)}</div>
+              <div className="row-val turnover">{money(row.turn)}</div>
+              <div className="row-val profit">{money(Math.max(0, row.pnl || 0))}</div>
+              <div className="row-val loss">{money(row.loss || Math.max(0, -(row.pnl || 0)))}</div>
             </div>
           ))}
         </div>
 
+        {showMetrics ? (
+          <div className="metrics-grid">
+            <div className="metrics-col">
+              <h3>Доходность дня</h3>
+              {yRows.length ? (
+                yRows.map((r) => (
+                  <div className="metrics-row" key={`y-${r.place}`}>
+                    <span>#{r.place} {r.name}</span>
+                    <span className="row-val profit">{pct(r.pct)} · {money(r.pnl)}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="metrics-empty">Пока нет данных за сегодня</p>
+              )}
+            </div>
+            <div className="metrics-col">
+              <h3>Просадка дня</h3>
+              {lRows.length ? (
+                lRows.map((r) => (
+                  <div className="metrics-row" key={`l-${r.place}`}>
+                    <span>#{r.place} {r.name}</span>
+                    <span className="row-val loss">{pct(r.pct)} · {money(r.pnl)}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="metrics-empty">Пока нет данных за сегодня</p>
+              )}
+            </div>
+          </div>
+        ) : null}
+
         <div className="action-buttons">
           <a href={channel} target="_blank" rel="noreferrer" className="action-btn telegram">
-            Телеграм канал
+            Telegram канал
           </a>
           <a href={rami} target="_blank" rel="noreferrer" className="action-btn rami">
-            <span className="btn-icon">💬</span>
             Написать Rami
           </a>
           <button type="button" className="action-btn prizes" onClick={() => setModal("prizes")}>
@@ -424,23 +508,23 @@ export function EventHome() {
           </button>
           <button type="button" className="action-btn rules" onClick={() => setModal("rules")}>
             <span className="btn-icon">📋</span>
-            Правила турнира
+            Правила
           </button>
           {profile ? (
             <button type="button" className="action-btn share" onClick={() => void share()}>
               <span className="btn-icon">🔗</span>
-              Поделиться результатом
+              Поделиться
             </button>
           ) : null}
         </div>
 
         <div className="search-section">
-          <h2 className="section-title" style={{ marginBottom: 15 }}>
-            НАЙДИ СЕБЯ В СИСТЕМЕ
+          <h2 className="section-title" style={{ marginBottom: 15, fontSize: 24 }}>
+            НАЙДИ СЕБЯ В РЕЙТИНГЕ
           </h2>
           <p className="search-subtitle">
-            Введи свой уникальный ID от Pocket Option, чтобы узнать свой ранг, статистику и место в
-            турнирной таблице.
+            Введи свой UID от Pocket Option, чтобы увидеть статистику и место в таблице. В рейтинг —
+            депозит от ${minDep} за сезон.
           </p>
           <form
             className="search-wrapper"
@@ -453,14 +537,14 @@ export function EventHome() {
               className="search-input"
               value={uid}
               onChange={(e) => setUid(e.target.value.replace(/\D/g, "").slice(0, 10))}
-              placeholder="Введите ваш ID..."
+              placeholder="Введите ваш UID..."
               inputMode="numeric"
             />
             <button type="submit" className="search-btn" disabled={busy}>
               {busy ? "ПРОВЕРЯЕМ…" : "ПОИСК"}
             </button>
           </form>
-          <p className="hint">* ID в Pocket Option состоит из 9–10 цифр.</p>
+          <p className="hint">* UID в Pocket Option состоит из 9–10 цифр.</p>
           {lookupErr ? <p className="hint" style={{ color: "#ff6b7d" }}>{lookupErr}</p> : null}
         </div>
 
@@ -469,64 +553,60 @@ export function EventHome() {
             <div className="welcome-msg">
               Привет, <span>{profile.name}</span>! 👋
             </div>
-            <div className="profile-grid">
-              <div className="rank-card">
-                <div className="rank-label">Ваш порядковый номер</div>
-                <div className="rank-value">#{profile.rank}</div>
-                <div className="rank-sub">
-                  Вы опередили <b>{profile.beaten.toLocaleString("en-US")}</b> трейдеров
-                </div>
+            {profile.in_ranking === false ? (
+              <div className="need-banner">
+                Чтобы попасть в рейтинг сезона, нужен депозит от ${minDep} с начала таймера. Сейчас{" "}
+                {money(profile.dep)}
+                {profile.need_deposit ? `, осталось ${money(profile.need_deposit)}` : ""}.
               </div>
-              <div className="stats-card">
-                <div className="stat-row">
-                  <span className="stat-label">Ваш ID</span>
-                  <span className="stat-value id">{profile.uid}</span>
-                </div>
-                <div className="stat-row">
-                  <span className="stat-label">Сумма депов</span>
-                  <span className="stat-value dep">{money(profile.dep)}</span>
-                </div>
-                {profile.turn > 0 ? (
-                  <div className="stat-row">
-                    <span className="stat-label">Оборот (30 дней)</span>
-                    <span className="stat-value turn">{money(profile.turn)}</span>
-                  </div>
-                ) : null}
+            ) : null}
+            <div className="stats-card">
+              <h3>Ваша статистика</h3>
+              <div className="stat-row">
+                <span className="stat-label">Место в рейтинге</span>
+                <span className="stat-value" style={{ color: "var(--neon-gold)" }}>
+                  {profile.in_ranking === false || profile.rank === 0 ? "вне рейтинга" : `#${profile.rank}`}
+                </span>
               </div>
-            </div>
-            <div className="neighbors-block">
-              <div className="neighbors-header">
-                <h3>📊 ВАШЕ ОКРУЖЕНИЕ В РЕЙТИНГЕ</h3>
-                <p>Ближайшие соседи по таблице (остальные скрыты системой)</p>
+              <div className="stat-row">
+                <span className="stat-label">UID</span>
+                <span className="stat-value id">{profile.uid}</span>
               </div>
-              {profile.neighbors.map((n) => (
-                <div className={n.is_you ? "neighbor-row current" : "neighbor-row"} key={`${n.rank}-${n.uid}`}>
-                  <div className="n-rank">#{n.rank}</div>
-                  <div className="n-name-block">
-                    <div className="n-name">
-                      {n.name}
-                      {n.is_you ? " (ВЫ)" : ""}
-                    </div>
-                    <div className="n-id">{n.dummy || !n.uid ? "ID: HIDDEN" : n.uid}</div>
-                  </div>
-                  <div className="n-dep">{money(n.dep)}</div>
-                </div>
-              ))}
+              <div className="stat-row">
+                <span className="stat-label">Депозит за сезон</span>
+                <span className="stat-value deposit">{money(profile.dep)}</span>
+              </div>
+              <div className="stat-row">
+                <span className="stat-label">Баланс</span>
+                <span className="stat-value deposit">{money(profile.balance || 0)}</span>
+              </div>
+              <div className="stat-row">
+                <span className="stat-label">Прибыль дня</span>
+                <span className={`stat-value ${(profile.pnl || 0) >= 0 ? "profit" : "loss"}`}>
+                  {money(profile.pnl || 0)}
+                </span>
+              </div>
+              <div className="stat-row">
+                <span className="stat-label">Доходность дня</span>
+                <span className={`stat-value ${(profile.return_pct || 0) >= 0 ? "profit" : "loss"}`}>
+                  {pct(profile.return_pct || 0)}
+                </span>
+              </div>
             </div>
           </div>
         ) : null}
 
         <footer className="po-footer">
-          <p>Закрытая лига. Сутки и снимок счёта — UTC+2.</p>
+          <p>Закрытая лига. Сутки и снимок счёта — UTC+2. В рейтинг от ${minDep} за сезон.</p>
         </footer>
       </div>
 
       <div className={`modal-overlay${modal === "format" ? " active" : ""}`} onClick={() => setModal(null)}>
         <div className="modal error" onClick={(e) => e.stopPropagation()}>
-          <h2>⚠️ ОШИБКА ФОРМАТА ID</h2>
+          <h2>ОШИБКА ФОРМАТА UID</h2>
           <p>
-            Введённый ID не похож на идентификатор Pocket Option. ID должен состоять из 9–10 цифр.
-            Посмотри на скриншоты и перепроверь, всё ли ты правильно сделал.
+            Введённый UID не похож на идентификатор Pocket Option. Должен состоять из 9–10 цифр.
+            Посмотри на скриншоты и перепроверь.
           </p>
           <HelpShots />
           <RamiHelp url={rami} />
@@ -538,11 +618,10 @@ export function EventHome() {
 
       <div className={`modal-overlay${modal === "missing" ? " active" : ""}`} onClick={() => setModal(null)}>
         <div className="modal error" onClick={(e) => e.stopPropagation()}>
-          <h2>⚠️ ID НЕ НАЙДЕН</h2>
+          <h2>UID НЕ НАЙДЕН</h2>
           <p>
             К сожалению, твоего ID нет в моей базе, видимо ты зарегистрировался не правильно или
-            скопировал свой ID не в том месте. Посмотри на скриншоты и перепроверь, всё ли ты
-            правильно сделал.
+            скопировал свой ID не в том месте. Посмотри на скриншоты и перепроверь.
           </p>
           <HelpShots />
           <RamiHelp url={rami} />
@@ -552,13 +631,22 @@ export function EventHome() {
         </div>
       </div>
 
+      <div className={`modal-overlay${modal === "need_deposit" ? " active" : ""}`} onClick={() => setModal(null)}>
+        <div className="modal" onClick={(e) => e.stopPropagation()}>
+          <h2>НУЖЕН ДЕПОЗИТ ${minDep}</h2>
+          <p>
+            UID найден, но в рейтинг сезона попадают счета с депозитом от ${minDep} с начала таймера.
+          </p>
+          <button type="button" className="modal-btn" onClick={() => setModal(null)}>
+            ПОНЯТНО
+          </button>
+        </div>
+      </div>
+
       <div className={`modal-overlay${modal === "name" ? " active" : ""}`}>
         <div className="modal success">
-          <h2>👋 ДОБРО ПОЖАЛОВАТЬ!</h2>
-          <p>
-            Ваш ID верен, но вы еще не участвовали в этом сезоне. Введите ваше имя (или никнейм),
-            чтобы мы могли вас идентифицировать для розыгрышей.
-          </p>
+          <h2>ДОБРО ПОЖАЛОВАТЬ!</h2>
+          <p>Ваш UID найден. Введите имя или никнейм для идентификации в рейтинге.</p>
           <input
             className="modal-input"
             value={regName}
@@ -577,10 +665,8 @@ export function EventHome() {
 
       <div className={`modal-overlay${modal === "prizes" ? " active" : ""}`} onClick={() => setModal(null)}>
         <div className="modal" onClick={(e) => e.stopPropagation()}>
-          <h2 style={{ background: "linear-gradient(90deg, var(--neon-gold), var(--neon-orange))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-            🏆 ПРИЗОВОЙ ФОНД
-          </h2>
-          <p>Топ-10 участников сезона получают денежные призы:</p>
+          <h2>ПРИЗОВОЙ ФОНД</h2>
+          <p>Призы выплачиваем мы. Распределение призового пула:</p>
           <div className="prize-list">
             {(data?.prize_table || []).map((p) => (
               <div className="prize-item" key={p.place}>
@@ -592,9 +678,6 @@ export function EventHome() {
               </div>
             ))}
           </div>
-          <p style={{ fontSize: 12, color: "var(--text-dim)" }}>
-            * Призы выплачиваются в течение 7 дней после окончания турнира
-          </p>
           <button type="button" className="modal-btn" onClick={() => setModal(null)}>
             ЗАКРЫТЬ
           </button>
@@ -603,9 +686,7 @@ export function EventHome() {
 
       <div className={`modal-overlay${modal === "rules" ? " active" : ""}`} onClick={() => setModal(null)}>
         <div className="modal" onClick={(e) => e.stopPropagation()}>
-          <h2 style={{ background: "linear-gradient(90deg, var(--neon-cyan), var(--neon-purple))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-            📋 ПРАВИЛА ТУРНИРА
-          </h2>
+          <h2>ПРАВИЛА ЧЕМПИОНАТА</h2>
           <div className="rules-list">
             {(data?.rules || []).map((text, i) => (
               <div className="rule-item" key={i}>
@@ -638,18 +719,6 @@ export function EventHome() {
               rel="noreferrer"
             >
               WhatsApp
-            </a>
-            <a
-              href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Facebook
-            </a>
-            <a
-              href={`fb-messenger://share/?link=${encodeURIComponent(shareUrl)}`}
-            >
-              Messenger
             </a>
             <button
               type="button"

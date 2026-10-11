@@ -366,22 +366,27 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="wrap">
-      <div className="kicker">OPS</div>
-      <h1>Админка</h1>
-      <div className="tabs">
-        <button type="button" className={`tab ${tab === "event" ? "on" : ""}`} onClick={() => openTab("event")}>
-          Ивент
+    <div className="adm">
+      <aside className="adm-sidebar">
+        <div className="adm-logo">
+          PO ADMIN
+          <span>Full Control Panel</span>
+        </div>
+        <div className="adm-nav-title">Основное</div>
+        <button type="button" className={`adm-nav-item ${tab === "event" ? "on" : ""}`} onClick={() => openTab("event")}>
+          Редактор Топ-10
         </button>
-        <button type="button" className={`tab ${tab === "users" ? "on" : ""}`} onClick={() => openTab("users")}>
+        <button type="button" className={`adm-nav-item ${tab === "users" ? "on" : ""}`} onClick={() => openTab("users")}>
           Участники
         </button>
-        <button type="button" className={`tab ${tab === "settings" ? "on" : ""}`} onClick={() => openTab("settings")}>
-          Настройки
+        <div className="adm-nav-title">Настройки</div>
+        <button type="button" className={`adm-nav-item ${tab === "settings" ? "on" : ""}`} onClick={() => openTab("settings")}>
+          Telegram и день
         </button>
+        <div className="adm-nav-title">Сессия</div>
         <button
           type="button"
-          className="tab"
+          className="adm-nav-item"
           onClick={() => {
             sessionStorage.removeItem(TOKEN_KEY);
             setAuthed(false);
@@ -389,9 +394,24 @@ export default function AdminPage() {
         >
           Выйти
         </button>
-      </div>
-      {status ? <p className="ok">{status}</p> : null}
-      {err ? <p className="err">{err}</p> : null}
+      </aside>
+      <main className="adm-main">
+        <div className="adm-card-header" style={{ border: "none", paddingBottom: 0 }}>
+          <div>
+            <h1 className="adm-page-title">
+              {tab === "event" ? "Чемпионат" : tab === "users" ? "Участники" : "Telegram и день"}
+            </h1>
+            <div className="adm-page-sub">
+              {tab === "event"
+                ? "Рандомизация пустышек, призы и окно сезона"
+                : tab === "users"
+                  ? "UID с возможностью редактирования"
+                  : "Шаблоны постов, снимки и закрытие дня"}
+            </div>
+          </div>
+        </div>
+        {status ? <p className="ok">{status}</p> : null}
+        {err ? <p className="err">{err}</p> : null}
       {tab === "event" ? (
         <EventPanel
           adminFetch={adminFetch}
@@ -717,6 +737,7 @@ export default function AdminPage() {
         {err ? <p className="err">{err}</p> : null}
       </form>
       ) : null}
-    </main>
+      </main>
+    </div>
   );
 }

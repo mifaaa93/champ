@@ -79,9 +79,12 @@ class PartnersClient:
             limiter.release()
 
     async def statistics_traders(self, day: str) -> dict:
+        return await self.statistics_range(day, day)
+
+    async def statistics_range(self, date_from: str, date_through: str) -> dict:
         params = {
-            "dateFrom": day,
-            "dateThrough": day,
+            "dateFrom": date_from,
+            "dateThrough": date_through,
             "group1": "trader",
             "deposited": "1",
             "fields": "depo_sum,wdrw_sum,net_dep,count_depo,count_ftd,ftd_sum,count_trades",

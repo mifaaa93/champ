@@ -28,6 +28,13 @@ async def job_statistics() -> None:
     async with SessionLocal() as session:
         result = await refresh_statistics(session)
         log.info("statistics %s", result)
+        from app.services.event import refresh_season_statistics
+
+        try:
+            season = await refresh_season_statistics(session)
+            log.info("season stats %s", season)
+        except Exception:
+            log.exception("season stats failed")
 
 
 async def job_snapshots() -> None:
@@ -37,6 +44,32 @@ async def job_snapshots() -> None:
         from app.services.event import refresh_event_board
 
         await refresh_event_board(session)
+
+
+async def job_dummy_tick() -> None:
+    async with SessionLocal() as session:
+        from app.services.event import refresh_event_board, tick_showcase
+        from app.timezone import now_champ
+
+        cfg = await get_settings(session)
+        interval_m = float(cfg.get("dummy_tick_minutes") or 1)
+        interval_m = max(0.5, min(interval_m, 1440))
+        state = await job_get(session, "dummy_tick")
+        now = now_champ()
+        last = state.get("last_ts")
+        if last:
+            try:
+                last_dt = datetime.fromisoformat(str(last))
+                if last_dt.tzinfo is None:
+                    last_dt = last_dt.replace(tzinfo=now.tzinfo)
+                if (now - last_dt.astimezone(now.tzinfo)).total_seconds() < interval_m * 60:
+                    return
+            except ValueError:
+                pass
+        changed = await tick_showcase(session)
+        await refresh_event_board(session)
+        await job_set(session, "dummy_tick", {"last_ts": now.isoformat()})
+        log.info("dummy tick changed=%s", changed)
 
 
 def _pack(seq, *, loss: bool = False):
@@ -264,6 +297,7 @@ def build_scheduler() -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone="Africa/Johannesburg")
     scheduler.add_job(job_statistics, "interval", minutes=10, id="stats", max_instances=1)
     scheduler.add_job(job_snapshots, "interval", minutes=5, id="snaps", max_instances=1)
+    scheduler.add_job(job_dummy_tick, "interval", seconds=30, id="dummies", max_instances=1)
     scheduler.add_job(job_publish, "interval", minutes=1, id="hourly", max_instances=1)
     scheduler.add_job(
         job_freeze_and_rollover, "interval", seconds=30, id="freeze", max_instances=1

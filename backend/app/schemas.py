@@ -69,7 +69,10 @@ class SettingsPatch(BaseModel):
     tg_final_yield_row: str | None = Field(default=None, max_length=400)
     tg_final_loss_row: str | None = Field(default=None, max_length=400)
     event_name: str | None = Field(default=None, max_length=64)
+    event_start: str | None = Field(default=None, max_length=64)
     event_end: str | None = Field(default=None, max_length=64)
+    event_min_deposit: float | None = Field(default=None, ge=50, le=1_000_000)
+    dummy_tick_minutes: float | None = Field(default=None, ge=0.5, le=1440)
     prize_pool: float | None = Field(default=None, ge=0, le=10_000_000)
     prize_table: list[dict] | None = None
     stats_players: int | None = Field(default=None, ge=0, le=10_000_000)

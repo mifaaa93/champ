@@ -17,8 +17,11 @@ DEFAULTS: dict = {
     "loss_comp_cap": 500,
     "require_trade": False,
     "prize_places": 3,
-    "event_name": "PO TOURNAMENT",
+    "event_name": "PO CHAMPIONSHIP",
+    "event_start": "",
     "event_end": "",
+    "event_min_deposit": 50,
+    "dummy_tick_minutes": 1,
     "prize_pool": 5000,
     "prize_table": [
         {"place": "1 место", "amount": 1500, "suffix": ""},
@@ -34,19 +37,14 @@ DEFAULTS: dict = {
     "rami_url": "https://t.me/rami_username",
     "event_rules": [
         "Турнир открыт для участников команды.",
-        "Рейтинг формируется по сумме депозитов за период турнира.",
+        "Рейтинг сезона считается по депозиту с начала таймера до его конца.",
+        "В рейтинг попадают участники с депозитом от $50 за сезон.",
+        "Доходность и просадка дня — открытые метрики того же чемпионата.",
         "Оборот учитывается за последние 30 дней активности, если данные есть в базе.",
         "Топ-10 витрины и призовой фонд задаются в админке.",
-        "Результаты обновляются по снимкам счёта.",
         "В случае споров решение организатора является окончательным.",
     ],
-    "activity": [
-        {"name": "Александр", "action": "поднялся на", "rank": 42, "extra": "", "time": "2 мин назад"},
-        {"name": "Дмитрий", "action": "пополнил депозит на", "rank": None, "extra": "$500", "time": "5 мин назад"},
-        {"name": "Максим", "action": "вошёл в Топ-100", "rank": 87, "extra": "", "time": "12 мин назад"},
-        {"name": "Сергей", "action": "обогнал", "rank": None, "extra": "12 трейдеров", "time": "18 мин назад"},
-        {"name": "Андрей", "action": "достиг оборота", "rank": None, "extra": "$50,000", "time": "25 мин назад"},
-    ],
+    "activity": [],
     **DEFAULT_TEMPLATES,
 }
 
@@ -76,6 +74,38 @@ async def get_settings(session: AsyncSession) -> dict:
         from app.timezone import now_champ
 
         merged["event_end"] = (now_champ() + timedelta(days=14)).isoformat()
+        changed = True
+    if not str(merged.get("event_start") or "").strip():
+        from datetime import timedelta
+
+        from app.timezone import now_champ
+
+        end_raw = str(merged.get("event_end") or "")
+        start_dt = None
+        try:
+            from datetime import datetime
+
+            start_dt = datetime.fromisoformat(end_raw.replace("Z", "+00:00")) - timedelta(days=14)
+        except ValueError:
+            start_dt = None
+        merged["event_start"] = (start_dt or now_champ()).isoformat()
+        changed = True
+    if merged.get("event_min_deposit") is None:
+        merged["event_min_deposit"] = 50
+        changed = True
+    if merged.get("dummy_tick_minutes") is None:
+        merged["dummy_tick_minutes"] = 1
+        changed = True
+    seeded = {
+        ("Александр", "поднялся на"),
+        ("Дмитрий", "пополнил депозит на"),
+        ("Максим", "вошёл в Топ-100"),
+        ("Сергей", "обогнал"),
+        ("Андрей", "достиг оборота"),
+    }
+    activity = merged.get("activity") or []
+    if activity and all((row.get("name"), row.get("action")) in seeded for row in activity):
+        merged["activity"] = []
         changed = True
     if changed:
         row.value = merged

@@ -164,7 +164,11 @@ class ShowcaseLead(Base):
     name: Mapped[str] = mapped_column(String(64), default="")
     dep: Mapped[Decimal] = mapped_column(Money, default=0)
     turn: Mapped[Decimal] = mapped_column(Money, default=0)
+    balance: Mapped[Decimal] = mapped_column(Money, default=0)
+    pnl: Mapped[Decimal] = mapped_column(Money, default=0)
+    return_pct: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=0)
     uid: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    randomize: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "PO Tournament",
-  description: "Закрытая лига. Турнир по депозитам.",
+  title: "PO Championship",
+  description: "Чемпионат. Рейтинг по депозиту сезона.",
   robots: { index: false, follow: false },
 };
 

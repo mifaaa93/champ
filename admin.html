@@ -1,0 +1,1603 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PO Championship | Admin Panel</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap');
+
+        :root {
+            --bg-dark: #0a0e1a;
+            --bg-sidebar: #060912;
+            --bg-card: rgba(15, 20, 35, 0.8);
+            --bg-input: rgba(0,0,0,0.4);
+            --neon-cyan: #00f3ff;
+            --neon-purple: #b026ff;
+            --neon-gold: #ffd700;
+            --neon-orange: #ff8c00;
+            --neon-green: #00ff88;
+            --neon-red: #ff4757;
+            --text-main: #e2e8f0;
+            --text-dim: #64748b;
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --sidebar-width: 260px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: 
+                radial-gradient(ellipse at 20% 0%, rgba(176, 38, 255, 0.08) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 100%, rgba(0, 243, 255, 0.05) 0%, transparent 50%);
+            z-index: -1;
+        }
+
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--glass-border);
+            padding: 30px 0;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 100;
+        }
+        .sidebar-logo {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 20px; font-weight: 900;
+            padding: 0 25px 30px;
+            background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            border-bottom: 1px solid var(--glass-border);
+            margin-bottom: 20px;
+        }
+        .sidebar-logo span {
+            display: block;
+            font-size: 11px;
+            font-family: 'Inter', sans-serif;
+            font-weight: 400;
+            color: var(--text-dim);
+            -webkit-text-fill-color: var(--text-dim);
+            margin-top: 5px;
+            letter-spacing: 1px;
+        }
+        .nav-section { padding: 10px 15px; margin-bottom: 10px; }
+        .nav-section-title {
+            font-size: 10px; color: var(--text-dim);
+            text-transform: uppercase; letter-spacing: 2px;
+            padding: 0 10px; margin-bottom: 10px;
+        }
+        .nav-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 15px; border-radius: 10px;
+            cursor: pointer; transition: all 0.3s;
+            font-size: 14px; font-weight: 500;
+            color: var(--text-dim); margin-bottom: 4px;
+        }
+        .nav-item:hover { background: rgba(255,255,255,0.03); color: var(--text-main); }
+        .nav-item.active {
+            background: linear-gradient(135deg, rgba(0, 243, 255, 0.1), rgba(176, 38, 255, 0.05));
+            color: var(--neon-cyan);
+            border: 1px solid rgba(0, 243, 255, 0.2);
+        }
+        .nav-item .icon { font-size: 18px; width: 24px; text-align: center; }
+        .nav-item .badge {
+            margin-left: auto; background: var(--neon-red);
+            color: white; font-size: 10px; padding: 2px 8px;
+            border-radius: 10px; font-weight: 700;
+        }
+        .sidebar-footer {
+            position: absolute; bottom: 20px; left: 0; right: 0; padding: 0 25px;
+        }
+        .admin-status {
+            display: flex; align-items: center; gap: 10px;
+            font-size: 12px; color: var(--text-dim);
+        }
+        .admin-status .dot {
+            width: 8px; height: 8px; background: var(--neon-green);
+            border-radius: 50%; animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        .main {
+            margin-left: var(--sidebar-width);
+            flex: 1; padding: 30px 40px; min-height: 100vh;
+        }
+        .page-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 30px; flex-wrap: wrap; gap: 15px;
+        }
+        .page-title { font-family: 'Orbitron', sans-serif; font-size: 28px; font-weight: 700; }
+        .page-subtitle { font-size: 13px; color: var(--text-dim); margin-top: 5px; }
+        .header-actions { display: flex; gap: 10px; }
+
+        .btn {
+            padding: 10px 20px; border-radius: 10px;
+            font-weight: 600; font-size: 13px; cursor: pointer;
+            transition: all 0.3s; border: 1px solid var(--glass-border);
+            font-family: 'Inter', sans-serif;
+            display: inline-flex; align-items: center; gap: 8px;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+            color: white; border: none;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0, 243, 255, 0.3); }
+        .btn-success {
+            background: linear-gradient(135deg, var(--neon-green), #10b981);
+            color: #000; border: none;
+        }
+        .btn-success:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(0, 255, 136, 0.3); }
+        .btn-danger {
+            background: linear-gradient(135deg, var(--neon-red), #ff6b81);
+            color: white; border: none;
+        }
+        .btn-danger:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(255, 71, 87, 0.3); }
+        .btn-ghost { background: transparent; color: var(--text-dim); }
+        .btn-ghost:hover { color: var(--text-main); border-color: var(--neon-cyan); }
+        .btn-sm { padding: 6px 12px; font-size: 11px; }
+        .btn-icon { padding: 8px 12px; }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px; padding: 25px;
+            backdrop-filter: blur(20px); margin-bottom: 25px;
+        }
+        .card-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 20px; padding-bottom: 15px;
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .card-title { font-family: 'Orbitron', sans-serif; font-size: 16px; font-weight: 700; }
+        .card-badge {
+            font-size: 11px; padding: 4px 12px; border-radius: 20px; font-weight: 600;
+        }
+        .badge-live {
+            background: rgba(0, 255, 136, 0.15); color: var(--neon-green);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px; margin-bottom: 30px;
+        }
+        .stat-card {
+            background: var(--bg-card); border: 1px solid var(--glass-border);
+            border-radius: 16px; padding: 25px; position: relative; overflow: hidden;
+            transition: all 0.3s; cursor: pointer;
+        }
+        .stat-card:hover { border-color: rgba(0, 243, 255, 0.3); transform: translateY(-3px); }
+        .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+        .stat-card.cyan::before { background: var(--neon-cyan); }
+        .stat-card.green::before { background: var(--neon-green); }
+        .stat-card.gold::before { background: var(--neon-gold); }
+        .stat-card.purple::before { background: var(--neon-purple); }
+        .stat-label {
+            font-size: 12px; color: var(--text-dim);
+            text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;
+        }
+        .stat-value {
+            font-family: 'Orbitron', sans-serif; font-size: 32px; font-weight: 900; margin-bottom: 5px;
+        }
+        .stat-card.cyan .stat-value { color: var(--neon-cyan); }
+        .stat-card.green .stat-value { color: var(--neon-green); }
+        .stat-card.gold .stat-value { color: var(--neon-gold); }
+        .stat-card.purple .stat-value { color: var(--neon-purple); }
+
+        .table-container { overflow-x: auto; }
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table th {
+            text-align: left; padding: 15px;
+            font-size: 11px; color: var(--text-dim);
+            text-transform: uppercase; letter-spacing: 1px;
+            border-bottom: 1px solid var(--glass-border); font-weight: 600;
+        }
+        .data-table td {
+            padding: 15px; border-bottom: 1px solid var(--glass-border); font-size: 14px;
+        }
+        .data-table tr:hover td { background: rgba(0, 243, 255, 0.02); }
+        .data-table .uid-cell {
+            font-family: 'Inter', monospace; color: var(--neon-cyan); font-weight: 600;
+        }
+        .data-table .name-cell { font-weight: 600; }
+        .data-table .profit-cell { color: var(--neon-green); font-weight: 700; }
+        .data-table .loss-cell { color: var(--neon-red); font-weight: 700; }
+        .data-table .rank-cell {
+            font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 16px;
+        }
+        .rank-1 { color: var(--neon-gold); }
+        .rank-2 { color: #c0c0c0; }
+        .rank-3 { color: #cd7f32; }
+
+        .status-badge {
+            padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+        }
+        .status-active { background: rgba(0, 255, 136, 0.15); color: var(--neon-green); }
+        .status-withdraw { background: rgba(255, 140, 0, 0.15); color: var(--neon-orange); }
+        .status-top { background: rgba(255, 215, 0, 0.15); color: var(--neon-gold); }
+        .status-random { 
+            background: rgba(176, 38, 255, 0.15); 
+            color: var(--neon-purple);
+            animation: randomPulse 2s infinite;
+        }
+        @keyframes randomPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .form-group { margin-bottom: 20px; }
+        .form-label {
+            display: block; font-size: 12px; color: var(--text-dim);
+            text-transform: uppercase; letter-spacing: 1px;
+            margin-bottom: 8px; font-weight: 600;
+        }
+        .form-input, .form-select {
+            width: 100%; padding: 12px 16px;
+            background: var(--bg-input); border: 1px solid var(--glass-border);
+            border-radius: 10px; color: white; font-size: 14px;
+            font-family: 'Inter', sans-serif; outline: none; transition: all 0.3s;
+        }
+        .form-input:focus, .form-select:focus {
+            border-color: var(--neon-cyan); box-shadow: 0 0 15px rgba(0, 243, 255, 0.1);
+        }
+        .form-hint { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
+
+        .search-bar {
+            display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;
+        }
+        .search-bar input {
+            flex: 1; min-width: 200px; padding: 12px 16px;
+            background: var(--bg-input); border: 1px solid var(--glass-border);
+            border-radius: 10px; color: white; font-size: 14px; outline: none;
+        }
+        .search-bar input:focus { border-color: var(--neon-cyan); }
+
+        .section { display: none; }
+        .section.active { display: block; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(10px);
+            justify-content: center; align-items: center; z-index: 1000;
+        }
+        .modal-overlay.active { display: flex !important; }
+        .modal {
+            background: linear-gradient(135deg, #121622, #0a0e1a);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px; padding: 30px;
+            max-width: 600px; width: 90%;
+            animation: modalPop 0.3s ease;
+            max-height: 90vh; overflow-y: auto;
+        }
+        @keyframes modalPop {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .modal h3 { font-family: 'Orbitron', sans-serif; margin-bottom: 15px; font-size: 20px; }
+        .modal p { color: var(--text-dim); margin-bottom: 20px; line-height: 1.6; font-size: 14px; }
+        .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 25px; }
+
+        .toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; }
+        .toast {
+            background: var(--bg-card); border: 1px solid var(--glass-border);
+            border-radius: 12px; padding: 15px 20px; margin-bottom: 10px;
+            backdrop-filter: blur(20px); animation: slideIn 0.3s ease;
+            display: flex; align-items: center; gap: 12px; min-width: 280px;
+        }
+        .toast.success { border-left: 4px solid var(--neon-green); }
+        .toast.error { border-left: 4px solid var(--neon-red); }
+        .toast.warning { border-left: 4px solid var(--neon-orange); }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(100px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 26px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .toggle-switch.active {
+            background: var(--neon-purple);
+        }
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+        .toggle-switch.active::after {
+            left: 27px;
+        }
+
+        .prize-editor-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .prize-card {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        .prize-card:hover {
+            border-color: rgba(255, 215, 0, 0.3);
+        }
+        .prize-card .prize-place {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .prize-card .prize-place.gold { color: var(--neon-gold); }
+        .prize-card .prize-place.silver { color: #c0c0c0; }
+        .prize-card .prize-place.bronze { color: #cd7f32; }
+        .prize-card .prize-place.default { color: var(--neon-cyan); }
+        .prize-card .prize-input {
+            width: 100%;
+            padding: 10px;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            color: var(--neon-cyan);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 20px;
+            font-weight: 700;
+            text-align: center;
+            outline: none;
+            transition: all 0.3s;
+        }
+        .prize-card .prize-input:focus {
+            border-color: var(--neon-gold);
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.2);
+        }
+        .prize-card .prize-label {
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-top: 8px;
+        }
+
+        .prize-total-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 25px;
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(255, 140, 0, 0.05));
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            border-radius: 14px;
+            margin-top: 20px;
+        }
+        .prize-total-bar .label {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 14px;
+            color: var(--neon-gold);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .prize-total-bar .total {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 28px;
+            font-weight: 900;
+            color: var(--neon-gold);
+        }
+        .prize-total-bar .total.over {
+            color: var(--neon-red);
+        }
+        .prize-total-bar .total.under {
+            color: var(--neon-green);
+        }
+
+        /* RANDOMIZATION SETTINGS */
+        .randomization-settings {
+            background: rgba(176, 38, 255, 0.05);
+            border: 1px solid rgba(176, 38, 255, 0.2);
+            border-radius: 14px;
+            padding: 25px;
+            margin-top: 20px;
+        }
+        .randomization-settings h3 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 16px;
+            color: var(--neon-purple);
+            margin-bottom: 20px;
+        }
+        .interval-display {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 24px;
+            font-weight: 900;
+            color: var(--neon-cyan);
+            margin: 10px 0;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main { margin-left: 0; padding: 20px; }
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+            .form-row { grid-template-columns: 1fr; }
+            .form-row-3 { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<aside class="sidebar">
+    <div class="sidebar-logo"> PO ADMIN<span>Full Control Panel</span></div>
+    <div class="nav-section">
+        <div class="nav-section-title">Основное</div>
+        <div class="nav-item active" onclick="showSection('dashboard', this)">
+            <span class="icon">📊</span> Дашборд
+        </div>
+        <div class="nav-item" onclick="showSection('participants', this)">
+            <span class="icon"></span> Участники
+            <span class="badge" id="participants-count">0</span>
+        </div>
+        <div class="nav-item" onclick="showSection('ranking', this)">
+            <span class="icon">🏆</span> Рейтинг
+        </div>
+        <div class="nav-item" onclick="showSection('top-editor', this)">
+            <span class="icon">✏️</span> Редактор Топ-10
+        </div>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Настройки</div>
+        <div class="nav-item" onclick="showSection('prize-editor', this)">
+            <span class="icon">💰</span> Призы ($)
+        </div>
+        <div class="nav-item" onclick="showSection('championship-settings', this)">
+            <span class="icon">⚙️</span> Параметры
+        </div>
+        <div class="nav-item" onclick="showSection('statistics-editor', this)">
+            <span class="icon"></span> Статистика
+        </div>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Управление</div>
+        <div class="nav-item" onclick="showSection('day-control', this)">
+            <span class="icon">⏱️</span> День
+        </div>
+        <div class="nav-item" onclick="showSection('telegram', this)">
+            <span class="icon">📱</span> Telegram
+        </div>
+    </div>
+    <div class="nav-section">
+        <div class="nav-section-title">Аналитика</div>
+        <div class="nav-item" onclick="showSection('archive', this)">
+            <span class="icon">📁</span> Архив
+        </div>
+        <div class="nav-item" onclick="showSection('change-log', this)">
+            <span class="icon">📋</span> История
+        </div>
+    </div>
+    <div class="sidebar-footer">
+        <div class="admin-status">
+            <span class="dot"></span>
+            <span>Полный контроль активен</span>
+        </div>
+    </div>
+</aside>
+
+<main class="main">
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- DASHBOARD -->
+    <section class="section active" id="section-dashboard">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Дашборд</h1>
+                <div class="page-subtitle">Кликните на карточку для редактирования</div>
+            </div>
+            <button class="btn btn-ghost" onclick="refreshData()">🔄 Обновить</button>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card cyan" onclick="editStatistic('participants')">
+                <div class="stat-label">Участников</div>
+                <div class="stat-value" id="stat-participants">0</div>
+            </div>
+            <div class="stat-card green" onclick="editStatistic('deposits')">
+                <div class="stat-label">Общий депозит</div>
+                <div class="stat-value" id="stat-deposits">$0</div>
+            </div>
+            <div class="stat-card gold" onclick="editStatistic('prize')">
+                <div class="stat-label">Призовой пул</div>
+                <div class="stat-value" id="stat-prize">$5,000</div>
+            </div>
+            <div class="stat-card purple" onclick="editStatistic('avgReturn')">
+                <div class="stat-label">Средняя доходность</div>
+                <div class="stat-value" id="stat-avg-return">+0%</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">🔥 Топ-5 текущего дня</div>
+                <span class="card-badge badge-live">● LIVE</span>
+            </div>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Место</th><th>UID</th><th>Имя</th>
+                            <th>Депозит</th><th>Баланс</th><th>Прибыль</th><th>Доходность</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dashboard-top5"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- PARTICIPANTS -->
+    <section class="section" id="section-participants">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Участники</h1>
+                <div class="page-subtitle">Все UID с возможностью редактирования</div>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-primary" onclick="showAddParticipantModal()">+ Добавить UID</button>
+                <button class="btn btn-ghost" onclick="exportCSV()">📥 Экспорт CSV</button>
+            </div>
+        </div>
+        <div class="card">
+            <div class="search-bar">
+                <input type="text" id="participant-search" placeholder="🔍 Поиск по UID или имени..." oninput="filterParticipants()">
+                <select id="status-filter" onchange="filterParticipants()">
+                    <option value="all">Все статусы</option>
+                    <option value="active">Активные</option>
+                    <option value="top">В Топ-10</option>
+                    <option value="withdraw">С выводом</option>
+                </select>
+            </div>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Место</th><th>UID</th><th>Имя</th>
+                            <th>Депозит</th><th>Баланс</th><th>Прибыль</th>
+                            <th>Доходность</th><th>Статус</th><th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="participants-table"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- RANKING -->
+    <section class="section" id="section-ranking">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Рейтинг Live</h1>
+                <div class="page-subtitle">Обновление каждые 5 минут</div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Место</th><th>UID</th><th>Имя</th>
+                            <th>Депозит</th><th>Баланс</th><th>Прибыль</th><th>Доходность</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ranking-table"></tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- TOP EDITOR -->
+    <section class="section" id="section-top-editor">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Редактор Топ-10</h1>
+                <div class="page-subtitle">🎲 Включите рандомизацию для "живого" эффекта на сайте</div>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-success" onclick="saveTop10()"> Сохранить</button>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">🏆 Текущий Топ-10</div>
+                <span class="card-badge badge-live">● Редактируемый</span>
+            </div>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Место</th><th>UID</th><th>Имя</th>
+                            <th>Депозит</th><th>Баланс</th><th>Прибыль</th>
+                            <th>Доходность</th><th>🎲 Рандом</th><th>Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody id="top10-editor-table"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">➕ Добавить в Топ-10</div>
+            </div>
+            <div class="search-bar">
+                <input type="text" id="add-to-top-search" placeholder="Введите UID лида для добавления в топ...">
+                <button class="btn btn-primary" onclick="addToTopFromSearch()">Найти и добавить</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- PRIZE EDITOR -->
+    <section class="section" id="section-prize-editor">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">💰 Редактор призов</h1>
+                <div class="page-subtitle">Настройка призового фонда в долларах</div>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-ghost" onclick="resetPrizes()">↺ Сбросить</button>
+                <button class="btn btn-success" onclick="savePrizes()">💾 Сохранить призы</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">🏆 Призовой фонд чемпионата</div>
+                <span class="card-badge badge-live">● Редактируемый</span>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Общий призовой пул ($)</label>
+                <input type="number" class="form-input" id="prize-total-pool" value="5000" onchange="updatePrizeTotal()">
+                <div class="form-hint">Общая сумма, которую вы готовы выплатить победителям</div>
+            </div>
+
+            <h3 style="font-family: 'Orbitron', sans-serif; font-size: 16px; margin: 25px 0 15px; color: var(--neon-gold);">Распределение призов</h3>
+            
+            <div class="prize-editor-grid">
+                <div class="prize-card">
+                    <div class="prize-place gold"> 1 МЕСТО</div>
+                    <input type="number" class="prize-input" id="prize-1" value="2000" onchange="updatePrizeTotal()">
+                    <div class="prize-label">Победитель</div>
+                </div>
+                <div class="prize-card">
+                    <div class="prize-place silver">🥈 2 МЕСТО</div>
+                    <input type="number" class="prize-input" id="prize-2" value="1250" onchange="updatePrizeTotal()">
+                    <div class="prize-label">Второй призёр</div>
+                </div>
+                <div class="prize-card">
+                    <div class="prize-place bronze"> 3 МЕСТО</div>
+                    <input type="number" class="prize-input" id="prize-3" value="750" onchange="updatePrizeTotal()">
+                    <div class="prize-label">Третий призёр</div>
+                </div>
+                <div class="prize-card">
+                    <div class="prize-place default">4-10 МЕСТА</div>
+                    <input type="number" class="prize-input" id="prize-4-10" value="1000" onchange="updatePrizeTotal()">
+                    <div class="prize-label">Общий пул (делится на 7)</div>
+                </div>
+            </div>
+
+            <div class="prize-total-bar">
+                <div class="label">Сумма призов:</div>
+                <div class="total" id="prize-sum-display">$5,000</div>
+            </div>
+            <div class="prize-total-bar" style="margin-top: 10px; background: linear-gradient(135deg, rgba(0, 243, 255, 0.1), rgba(176, 38, 255, 0.05)); border-color: rgba(0, 243, 255, 0.3);">
+                <div class="label" style="color: var(--neon-cyan);">Остаток пула:</div>
+                <div class="total" id="prize-remaining-display" style="color: var(--neon-cyan);">$0</div>
+            </div>
+
+            <div style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 10px;">
+                <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 8px;">💡 Автоматический расчёт на каждого (4-10 места):</div>
+                <div style="font-family: 'Orbitron', sans-serif; font-size: 18px; color: var(--neon-cyan);" id="per-person-display">$142.86</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">📉 Компенсация потерь (Номинация B)</div>
+            </div>
+            <div class="form-row-3">
+                <div class="form-group">
+                    <label class="form-label">1 место — % от убытка</label>
+                    <input type="number" class="form-input" id="comp-1" value="15" min="0" max="100">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">2 место — % от убытка</label>
+                    <input type="number" class="form-input" id="comp-2" value="10" min="0" max="100">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">3 место — % от убытка</label>
+                    <input type="number" class="form-input" id="comp-3" value="5" min="0" max="100">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Кап компенсации ($)</label>
+                <input type="number" class="form-input" id="comp-cap" value="1000" min="0">
+                <div class="form-hint">Максимальная выплата одному участнику по номинации B</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">👁️ Предпросмотр на сайте</div>
+            </div>
+            <div id="prize-preview" style="padding: 20px; background: rgba(0,0,0,0.3); border-radius: 12px;">
+            </div>
+        </div>
+    </section>
+
+    <!-- CHAMPIONSHIP SETTINGS -->
+    <section class="section" id="section-championship-settings">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">⚙️ Параметры чемпионата</h1>
+                <div class="page-subtitle">Длительность, интервалы, рандомизация</div>
+            </div>
+            <button class="btn btn-success" onclick="saveChampionshipSettings()">💾 Сохранить все</button>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">⏱️ Длительность и время</div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Дней чемпионата</label>
+                    <input type="number" class="form-input" id="duration-days" value="7" min="1" max="365">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Часовой пояс</label>
+                    <select class="form-select" id="timezone">
+                        <option value="0">UTC</option>
+                        <option value="4" selected>Dubai (UTC+4)</option>
+                        <option value="3">Moscow (UTC+3)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- RANDOMIZATION SETTINGS (NEW!) -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">🎲 Рандомизация Топ-10</div>
+                <span class="card-badge badge-live">● Настраиваемый интервал</span>
+            </div>
+            
+            <div class="randomization-settings">
+                <h3>⚡ Интервал обновления данных</h3>
+                <div class="form-group">
+                    <label class="form-label">Интервал рандомизации (минуты)</label>
+                    <input type="number" class="form-input" id="randomization-interval" value="1" min="0.1" max="1440" step="0.1" onchange="updateIntervalDisplay()">
+                    <div class="form-hint">Введите любое число в минутах (например: 0.5 = 30 секунд, 1 = 1 минута, 5 = 5 минут)</div>
+                </div>
+                
+                <div style="margin-top: 20px; padding: 20px; background: rgba(0,0,0,0.3); border-radius: 10px; text-align: center;">
+                    <div style="font-size: 12px; color: var(--text-dim); margin-bottom: 10px;">Текущий интервал:</div>
+                    <div class="interval-display" id="interval-display">1 минута</div>
+                    <div style="font-size: 14px; color: var(--neon-cyan);" id="interval-seconds-display">60 секунд</div>
+                </div>
+
+                <div class="form-group" style="margin-top: 20px;">
+                    <label class="form-label">Быстрые presets</label>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn btn-ghost btn-sm" onclick="setIntervalPreset(0.5)">30 сек</button>
+                        <button class="btn btn-ghost btn-sm" onclick="setIntervalPreset(1)">1 мин</button>
+                        <button class="btn btn-ghost btn-sm" onclick="setIntervalPreset(5)">5 мин</button>
+                        <button class="btn btn-ghost btn-sm" onclick="setIntervalPreset(10)">10 мин</button>
+                        <button class="btn btn-ghost btn-sm" onclick="setIntervalPreset(30)">30 мин</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- STATISTICS EDITOR -->
+    <section class="section" id="section-statistics-editor">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Редактор статистики</h1>
+                <div class="page-subtitle">Ручное управление метриками</div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-header"><div class="card-title">📊 Метрики</div></div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Участники</label>
+                    <input type="number" class="form-input" id="edit-participants" value="0">
+                    <button class="btn btn-primary btn-sm" style="margin-top: 10px;" onclick="updateStatistic('participants')">Применить</button>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Общий депозит ($)</label>
+                    <input type="number" class="form-input" id="edit-deposits" value="0">
+                    <button class="btn btn-primary btn-sm" style="margin-top: 10px;" onclick="updateStatistic('deposits')">Применить</button>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Призовой пул ($)</label>
+                    <input type="number" class="form-input" id="edit-prize" value="5000">
+                    <button class="btn btn-primary btn-sm" style="margin-top: 10px;" onclick="updateStatistic('prize')">Применить</button>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Средняя доходность (%)</label>
+                    <input type="number" class="form-input" id="edit-avg-return" value="0" step="0.1">
+                    <button class="btn btn-primary btn-sm" style="margin-top: 10px;" onclick="updateStatistic('avgReturn')">Применить</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- DAY CONTROL -->
+    <section class="section" id="section-day-control">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Управление днём</h1>
+            </div>
+        </div>
+        <div class="card">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                <button class="btn btn-primary" onclick="takeSnapshot()">📸 Snapshot</button>
+                <button class="btn btn-primary" onclick="recalculateRanking()">🔄 Пересчитать</button>
+                <button class="btn btn-success" onclick="sendTelegramUpdate()">📤 Telegram</button>
+                <button class="btn btn-danger" onclick="closeDay()">🔒 Закрыть день</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- TELEGRAM -->
+    <section class="section" id="section-telegram">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Telegram бот</h1>
+            </div>
+        </div>
+        <div class="card">
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Токен бота</label>
+                    <input type="password" class="form-input" value="7123456789:AAHxxx">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">ID группы</label>
+                    <input type="text" class="form-input" value="@po_championship">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ARCHIVE -->
+    <section class="section" id="section-archive">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">Архив</h1>
+            </div>
+        </div>
+        <div class="card">
+            <p style="color: var(--text-dim); text-align: center; padding: 40px;">Архив пуст</p>
+        </div>
+    </section>
+
+    <!-- CHANGE LOG -->
+    <section class="section" id="section-change-log">
+        <div class="page-header">
+            <div>
+                <h1 class="page-title">История изменений</h1>
+            </div>
+            <button class="btn btn-ghost" onclick="clearChangeLog()">🗑️ Очистить</button>
+        </div>
+        <div class="card">
+            <div id="change-log-list"></div>
+        </div>
+    </section>
+</main>
+
+<!-- MODAL: Edit Statistic -->
+<div class="modal-overlay" id="editStatModal">
+    <div class="modal">
+        <h3>✏️ Редактирование метрики</h3>
+        <p id="edit-stat-description">Введите новое значение</p>
+        <div class="form-group">
+            <label class="form-label" id="edit-stat-label">Значение</label>
+            <input type="number" class="form-input" id="edit-stat-value" step="0.01">
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="closeModal('editStatModal')">Отмена</button>
+            <button class="btn btn-success" onclick="saveStatisticEdit()">💾 Сохранить</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Edit Participant -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal">
+        <h3>✏️ Редактирование лида</h3>
+        <p>UID: <span id="edit-uid-display" style="color: var(--neon-cyan); font-weight: 700;"></span></p>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Имя</label>
+                <input type="text" class="form-input" id="edit-name">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Место</label>
+                <input type="number" class="form-input" id="edit-rank" min="1" max="100">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Депозит ($)</label>
+                <input type="number" class="form-input" id="edit-deposit" min="0">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Баланс ($)</label>
+                <input type="number" class="form-input" id="edit-balance" min="0">
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Прибыль ($)</label>
+                <input type="number" class="form-input" id="edit-profit">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Доходность (%)</label>
+                <input type="number" class="form-input" id="edit-return" step="0.1">
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="closeModal('editModal')">Отмена</button>
+            <button class="btn btn-danger" onclick="deleteParticipant()">️ Удалить</button>
+            <button class="btn btn-success" onclick="saveEdit()">💾 Сохранить</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: Add Participant -->
+<div class="modal-overlay" id="addModal">
+    <div class="modal">
+        <h3>➕ Добавить участника</h3>
+        <div class="form-group">
+            <label class="form-label">UID (9-10 цифр)</label>
+            <input type="text" class="form-input" id="new-uid" placeholder="123456789">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Имя</label>
+            <input type="text" class="form-input" id="new-name" placeholder="Трейдер">
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label class="form-label">Депозит ($)</label>
+                <input type="number" class="form-input" id="new-deposit" value="0">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Баланс ($)</label>
+                <input type="number" class="form-input" id="new-balance" value="0">
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="closeModal('addModal')">Отмена</button>
+            <button class="btn btn-primary" onclick="addParticipant()">Добавить</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ===== ДАННЫЕ =====
+let participants = [
+    { uid: '123456789', name: 'Ахмед', deposit: 5000, balance: 17500, profit: 12500, returnPct: 250, status: 'top', rank: 1, randomize: false },
+    { uid: '234567890', name: 'Равшан', deposit: 3000, balance: 8100, profit: 5100, returnPct: 170, status: 'top', rank: 2, randomize: false },
+    { uid: '345678901', name: 'Джамшут', deposit: 2000, balance: 5000, profit: 3000, returnPct: 150, status: 'top', rank: 3, randomize: true },
+    { uid: '456789012', name: 'Тимур', deposit: 4000, balance: 8800, profit: 4800, returnPct: 120, status: 'top', rank: 4, randomize: false },
+    { uid: '567890123', name: 'Азамат', deposit: 1500, balance: 3000, profit: 1500, returnPct: 100, status: 'top', rank: 5, randomize: true },
+    { uid: '678901234', name: 'Руслан', deposit: 2500, balance: 4750, profit: 2250, returnPct: 90, status: 'top', rank: 6, randomize: false },
+    { uid: '789012345', name: 'Бахтиёр', deposit: 6000, balance: 7300, profit: 2500, returnPct: 52, status: 'top', rank: 7, randomize: true },
+    { uid: '890123456', name: 'Фарход', deposit: 1000, balance: 2200, profit: 1200, returnPct: 120, status: 'top', rank: 8, randomize: false },
+    { uid: '901234567', name: 'Шерзод', deposit: 3500, balance: 4100, profit: 600, returnPct: 17, status: 'top', rank: 9, randomize: true },
+    { uid: '012345678', name: 'Улугбек', deposit: 2000, balance: 2600, profit: 600, returnPct: 30, status: 'top', rank: 10, randomize: false },
+    { uid: '111222333', name: 'Максим', deposit: 5000, balance: 2000, profit: -3000, returnPct: -60, status: 'active', rank: 11, randomize: false },
+    { uid: '222333444', name: 'Дмитрий', deposit: 3000, balance: 1500, profit: -1500, returnPct: -50, status: 'active', rank: 12, randomize: false }
+];
+
+let prizeSettings = {
+    totalPool: 5000,
+    prizes: { 1: 2000, 2: 1250, 3: 750, '4-10': 1000 },
+    compensation: { 1: 15, 2: 10, 3: 5, cap: 1000 }
+};
+
+let championshipStats = {
+    participants: 1247,
+    deposits: 62350,
+    prize: 5000,
+    avgReturn: 45.2
+};
+
+// Настройки рандомизации (сохраняются в localStorage)
+let randomizationSettings = {
+    intervalMinutes: 1, // по умолчанию 1 минута
+    enabled: true
+};
+
+let changeLog = [];
+let editingUid = null;
+let editingStat = null;
+
+// ===== НАВИГАЦИЯ =====
+function showSection(sectionId, navItem) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById(`section-${sectionId}`).classList.add('active');
+    if (navItem) navItem.classList.add('active');
+    
+    if (sectionId === 'dashboard') updateDashboard();
+    if (sectionId === 'participants') renderParticipants();
+    if (sectionId === 'ranking') renderRanking();
+    if (sectionId === 'top-editor') renderTop10Editor();
+    if (sectionId === 'prize-editor') renderPrizeEditor();
+    if (sectionId === 'championship-settings') loadChampionshipSettings();
+    if (sectionId === 'change-log') renderChangeLog();
+}
+
+// ===== DASHBOARD =====
+function updateDashboard() {
+    document.getElementById('stat-participants').textContent = championshipStats.participants.toLocaleString();
+    document.getElementById('stat-deposits').textContent = '$' + championshipStats.deposits.toLocaleString();
+    document.getElementById('stat-prize').textContent = '$' + championshipStats.prize.toLocaleString();
+    document.getElementById('stat-avg-return').textContent = (championshipStats.avgReturn >= 0 ? '+' : '') + championshipStats.avgReturn.toFixed(1) + '%';
+    document.getElementById('participants-count').textContent = participants.length;
+    
+    const top5 = [...participants].filter(p => p.status === 'top').sort((a, b) => a.rank - b.rank).slice(0, 5);
+    const tbody = document.getElementById('dashboard-top5');
+    tbody.innerHTML = '';
+    top5.forEach((p, i) => {
+        const rankClass = i < 3 ? `rank-${i+1}` : '';
+        tbody.innerHTML += `
+            <tr>
+                <td class="rank-cell ${rankClass}">${i + 1}</td>
+                <td class="uid-cell">${p.uid}</td>
+                <td class="name-cell">${p.name}</td>
+                <td>$${p.deposit.toLocaleString()}</td>
+                <td>$${p.balance.toLocaleString()}</td>
+                <td class="${p.profit >= 0 ? 'profit-cell' : 'loss-cell'}">$${p.profit.toLocaleString()}</td>
+                <td class="${p.returnPct >= 0 ? 'profit-cell' : 'loss-cell'}">${p.returnPct >= 0 ? '+' : ''}${p.returnPct}%</td>
+            </tr>
+        `;
+    });
+}
+
+// ===== CHAMPIONSHIP SETTINGS =====
+function loadChampionshipSettings() {
+    document.getElementById('duration-days').value = 7;
+    document.getElementById('timezone').value = '4';
+    document.getElementById('randomization-interval').value = randomizationSettings.intervalMinutes;
+    updateIntervalDisplay();
+}
+
+function updateIntervalDisplay() {
+    const minutes = parseFloat(document.getElementById('randomization-interval').value) || 1;
+    randomizationSettings.intervalMinutes = minutes;
+    
+    const seconds = minutes * 60;
+    const display = document.getElementById('interval-display');
+    const secondsDisplay = document.getElementById('interval-seconds-display');
+    
+    if (minutes < 1) {
+        display.textContent = `${seconds} секунд`;
+    } else if (minutes === 1) {
+        display.textContent = '1 минута';
+    } else if (minutes < 5) {
+        display.textContent = `${minutes} минуты`;
+    } else {
+        display.textContent = `${minutes} минут`;
+    }
+    
+    secondsDisplay.textContent = `(${seconds} секунд)`;
+    
+    // Сохраняем в localStorage
+    localStorage.setItem('randomizationInterval', minutes);
+}
+
+function setIntervalPreset(minutes) {
+    document.getElementById('randomization-interval').value = minutes;
+    updateIntervalDisplay();
+    showToast(`⚡ Интервал установлен: ${minutes} мин`, 'success');
+}
+
+function saveChampionshipSettings() {
+    const duration = parseInt(document.getElementById('duration-days').value) || 7;
+    const timezone = document.getElementById('timezone').value;
+    const interval = parseFloat(document.getElementById('randomization-interval').value) || 1;
+    
+    randomizationSettings.intervalMinutes = interval;
+    localStorage.setItem('randomizationInterval', interval);
+    
+    changeLog.unshift({
+        time: new Date().toLocaleString('ru-RU'),
+        uid: 'СИСТЕМА',
+        name: 'Админ',
+        changes: `Параметры: ${duration} дн., UTC+${timezone}, интервал ${interval} мин`
+    });
+    
+    showToast('💾 Параметры сохранены', 'success');
+}
+
+// ===== PRIZE EDITOR =====
+function renderPrizeEditor() {
+    document.getElementById('prize-total-pool').value = prizeSettings.totalPool;
+    document.getElementById('prize-1').value = prizeSettings.prizes[1];
+    document.getElementById('prize-2').value = prizeSettings.prizes[2];
+    document.getElementById('prize-3').value = prizeSettings.prizes[3];
+    document.getElementById('prize-4-10').value = prizeSettings.prizes['4-10'];
+    document.getElementById('comp-1').value = prizeSettings.compensation[1];
+    document.getElementById('comp-2').value = prizeSettings.compensation[2];
+    document.getElementById('comp-3').value = prizeSettings.compensation[3];
+    document.getElementById('comp-cap').value = prizeSettings.compensation.cap;
+    
+    updatePrizeTotal();
+    renderPrizePreview();
+}
+
+function updatePrizeTotal() {
+    const p1 = parseInt(document.getElementById('prize-1').value) || 0;
+    const p2 = parseInt(document.getElementById('prize-2').value) || 0;
+    const p3 = parseInt(document.getElementById('prize-3').value) || 0;
+    const p4_10 = parseInt(document.getElementById('prize-4-10').value) || 0;
+    const totalPool = parseInt(document.getElementById('prize-total-pool').value) || 0;
+    
+    const sum = p1 + p2 + p3 + p4_10;
+    const remaining = totalPool - sum;
+    const perPerson = p4_10 / 7;
+    
+    const sumDisplay = document.getElementById('prize-sum-display');
+    sumDisplay.textContent = '$' + sum.toLocaleString();
+    sumDisplay.className = 'total' + (sum > totalPool ? ' over' : sum < totalPool ? ' under' : '');
+    
+    const remainingDisplay = document.getElementById('prize-remaining-display');
+    remainingDisplay.textContent = (remaining >= 0 ? '$' : '-$') + Math.abs(remaining).toLocaleString();
+    remainingDisplay.style.color = remaining >= 0 ? 'var(--neon-green)' : 'var(--neon-red)';
+    
+    document.getElementById('per-person-display').textContent = '$' + perPerson.toFixed(2);
+    
+    renderPrizePreview();
+}
+
+function renderPrizePreview() {
+    const preview = document.getElementById('prize-preview');
+    const p1 = parseInt(document.getElementById('prize-1').value) || 0;
+    const p2 = parseInt(document.getElementById('prize-2').value) || 0;
+    const p3 = parseInt(document.getElementById('prize-3').value) || 0;
+    const p4_10 = parseInt(document.getElementById('prize-4-10').value) || 0;
+    const perPerson = (p4_10 / 7).toFixed(2);
+    
+    preview.innerHTML = `
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: rgba(255,215,0,0.1); border-radius: 10px; border-left: 4px solid var(--neon-gold);">
+                <span style="font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--neon-gold);">🥇 1 место</span>
+                <span style="font-family: 'Orbitron', sans-serif; font-size: 20px; font-weight: 900; color: var(--neon-cyan);">$${p1.toLocaleString()}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: rgba(192,192,192,0.1); border-radius: 10px; border-left: 4px solid #c0c0c0;">
+                <span style="font-family: 'Orbitron', sans-serif; font-weight: 700; color: #c0c0c0;">🥈 2 место</span>
+                <span style="font-family: 'Orbitron', sans-serif; font-size: 20px; font-weight: 900; color: var(--neon-cyan);">$${p2.toLocaleString()}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: rgba(205,127,50,0.1); border-radius: 10px; border-left: 4px solid #cd7f32;">
+                <span style="font-family: 'Orbitron', sans-serif; font-weight: 700; color: #cd7f32;">🥉 3 место</span>
+                <span style="font-family: 'Orbitron', sans-serif; font-size: 20px; font-weight: 900; color: var(--neon-cyan);">$${p3.toLocaleString()}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; background: rgba(0,243,255,0.1); border-radius: 10px; border-left: 4px solid var(--neon-cyan);">
+                <span style="font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--neon-cyan);">4-10 места (каждому)</span>
+                <span style="font-family: 'Orbitron', sans-serif; font-size: 20px; font-weight: 900; color: var(--neon-cyan);">$${perPerson}</span>
+            </div>
+        </div>
+    `;
+}
+
+function savePrizes() {
+    prizeSettings.totalPool = parseInt(document.getElementById('prize-total-pool').value) || 0;
+    prizeSettings.prizes[1] = parseInt(document.getElementById('prize-1').value) || 0;
+    prizeSettings.prizes[2] = parseInt(document.getElementById('prize-2').value) || 0;
+    prizeSettings.prizes[3] = parseInt(document.getElementById('prize-3').value) || 0;
+    prizeSettings.prizes['4-10'] = parseInt(document.getElementById('prize-4-10').value) || 0;
+    prizeSettings.compensation[1] = parseInt(document.getElementById('comp-1').value) || 0;
+    prizeSettings.compensation[2] = parseInt(document.getElementById('comp-2').value) || 0;
+    prizeSettings.compensation[3] = parseInt(document.getElementById('comp-3').value) || 0;
+    prizeSettings.compensation.cap = parseInt(document.getElementById('comp-cap').value) || 0;
+    
+    championshipStats.prize = prizeSettings.totalPool;
+    
+    changeLog.unshift({
+        time: new Date().toLocaleString('ru-RU'),
+        uid: 'СИСТЕМА',
+        name: 'Админ',
+        changes: `Призы обновлены: 1=$${prizeSettings.prizes[1]}, 2=$${prizeSettings.prizes[2]}, 3=$${prizeSettings.prizes[3]}, 4-10=$${prizeSettings.prizes['4-10']}`
+    });
+    
+    updateDashboard();
+    showToast('💰 Призы сохранены в долларах', 'success');
+}
+
+function resetPrizes() {
+    if (confirm('Сбросить призы к значениям по умолчанию?')) {
+        prizeSettings = {
+            totalPool: 5000,
+            prizes: { 1: 2000, 2: 1250, 3: 750, '4-10': 1000 },
+            compensation: { 1: 15, 2: 10, 3: 5, cap: 1000 }
+        };
+        renderPrizeEditor();
+        showToast('️ Призы сброшены', 'warning');
+    }
+}
+
+// ===== EDIT STATISTIC =====
+function editStatistic(statName) {
+    editingStat = statName;
+    const labels = {
+        participants: 'Количество участников',
+        deposits: 'Общий депозит ($)',
+        prize: 'Призовой пул ($)',
+        avgReturn: 'Средняя доходность (%)'
+    };
+    const values = {
+        participants: championshipStats.participants,
+        deposits: championshipStats.deposits,
+        prize: championshipStats.prize,
+        avgReturn: championshipStats.avgReturn
+    };
+    
+    document.getElementById('edit-stat-description').textContent = `Редактирование: ${labels[statName]}`;
+    document.getElementById('edit-stat-label').textContent = labels[statName];
+    document.getElementById('edit-stat-value').value = values[statName];
+    document.getElementById('editStatModal').classList.add('active');
+}
+
+function saveStatisticEdit() {
+    if (!editingStat) return;
+    const newValue = parseFloat(document.getElementById('edit-stat-value').value);
+    const oldValue = championshipStats[editingStat];
+    championshipStats[editingStat] = newValue;
+    
+    const labels = { participants: 'Участники', deposits: 'Общий депозит', prize: 'Призовой пул', avgReturn: 'Средняя доходность' };
+    changeLog.unshift({
+        time: new Date().toLocaleString('ru-RU'),
+        uid: 'СИСТЕМА',
+        name: 'Админ',
+        changes: `${labels[editingStat]}: ${oldValue} → ${newValue}`
+    });
+    
+    closeModal('editStatModal');
+    updateDashboard();
+    showToast(`✅ ${labels[editingStat]} обновлено`, 'success');
+}
+
+function updateStatistic(statName) {
+    const inputId = `edit-${statName === 'avgReturn' ? 'avg-return' : statName}`;
+    const value = parseFloat(document.getElementById(inputId).value);
+    championshipStats[statName] = value;
+    updateDashboard();
+    showToast(`✅ Метрика обновлена`, 'success');
+}
+
+// ===== PARTICIPANTS =====
+function renderParticipants(data = null) {
+    const tbody = document.getElementById('participants-table');
+    tbody.innerHTML = '';
+    const list = data || participants;
+    
+    list.forEach(p => {
+        const statusClass = p.status === 'active' ? 'status-active' : p.status === 'top' ? 'status-top' : 'status-withdraw';
+        const statusText = p.status === 'active' ? 'Активен' : p.status === 'top' ? 'Топ-10' : 'Вывод';
+        tbody.innerHTML += `
+            <tr>
+                <td class="rank-cell">${p.rank}</td>
+                <td class="uid-cell">${p.uid}</td>
+                <td class="name-cell">${p.name}</td>
+                <td>$${p.deposit.toLocaleString()}</td>
+                <td>$${p.balance.toLocaleString()}</td>
+                <td class="${p.profit >= 0 ? 'profit-cell' : 'loss-cell'}">$${p.profit.toLocaleString()}</td>
+                <td class="${p.returnPct >= 0 ? 'profit-cell' : 'loss-cell'}">${p.returnPct >= 0 ? '+' : ''}${p.returnPct}%</td>
+                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                <td><button class="btn btn-ghost btn-icon" onclick="editParticipant('${p.uid}')">✏️</button></td>
+            </tr>
+        `;
+    });
+}
+
+function filterParticipants() {
+    const search = document.getElementById('participant-search').value.toLowerCase();
+    const status = document.getElementById('status-filter').value;
+    
+    let filtered = participants.filter(p => {
+        const matchSearch = p.uid.toLowerCase().includes(search) || p.name.toLowerCase().includes(search);
+        const matchStatus = status === 'all' || p.status === status;
+        return matchSearch && matchStatus;
+    });
+    
+    renderParticipants(filtered);
+}
+
+// ===== EDIT PARTICIPANT =====
+function editParticipant(uid) {
+    const p = participants.find(x => x.uid === uid);
+    if (!p) return;
+    
+    editingUid = uid;
+    document.getElementById('edit-uid-display').textContent = uid;
+    document.getElementById('edit-name').value = p.name;
+    document.getElementById('edit-rank').value = p.rank;
+    document.getElementById('edit-deposit').value = p.deposit;
+    document.getElementById('edit-balance').value = p.balance;
+    document.getElementById('edit-profit').value = p.profit;
+    document.getElementById('edit-return').value = p.returnPct;
+    
+    document.getElementById('editModal').classList.add('active');
+}
+
+function saveEdit() {
+    if (!editingUid) return;
+    const p = participants.find(x => x.uid === editingUid);
+    if (!p) return;
+    
+    p.name = document.getElementById('edit-name').value;
+    p.rank = parseInt(document.getElementById('edit-rank').value);
+    p.deposit = parseInt(document.getElementById('edit-deposit').value);
+    p.balance = parseInt(document.getElementById('edit-balance').value);
+    p.profit = parseInt(document.getElementById('edit-profit').value);
+    p.returnPct = parseFloat(document.getElementById('edit-return').value);
+    
+    closeModal('editModal');
+    renderParticipants();
+    updateDashboard();
+    showToast(`✅ Данные ${p.name} обновлены`, 'success');
+}
+
+function deleteParticipant() {
+    if (!editingUid) return;
+    if (!confirm('Удалить участника?')) return;
+    participants = participants.filter(p => p.uid !== editingUid);
+    closeModal('editModal');
+    renderParticipants();
+    updateDashboard();
+    showToast('🗑️ Участник удалён', 'warning');
+}
+
+function showAddParticipantModal() {
+    document.getElementById('addModal').classList.add('active');
+}
+
+function addParticipant() {
+    const uid = document.getElementById('new-uid').value.trim();
+    const name = document.getElementById('new-name').value.trim() || 'Трейдер';
+    const deposit = parseInt(document.getElementById('new-deposit').value) || 0;
+    const balance = parseInt(document.getElementById('new-balance').value) || 0;
+    
+    if (!/^\d{9,10}$/.test(uid)) {
+        showToast('❌ Неверный UID', 'error');
+        return;
+    }
+    
+    const profit = balance - deposit;
+    const returnPct = deposit > 0 ? (profit / deposit) * 100 : 0;
+    
+    participants.push({
+        uid, name, deposit, balance, profit,
+        returnPct: Math.round(returnPct * 10) / 10,
+        status: 'active',
+        rank: participants.length + 1,
+        randomize: false
+    });
+    
+    closeModal('addModal');
+    renderParticipants();
+    updateDashboard();
+    showToast(`✅ UID ${uid} добавлен`, 'success');
+}
+
+// ===== TOP-10 EDITOR =====
+function renderTop10Editor() {
+    const tbody = document.getElementById('top10-editor-table');
+    tbody.innerHTML = '';
+    const top10 = participants.filter(p => p.status === 'top').sort((a, b) => a.rank - b.rank);
+    
+    top10.forEach((p, i) => {
+        const rankClass = i < 3 ? `rank-${i+1}` : '';
+        const randomClass = p.randomize ? 'status-random' : 'status-active';
+        const randomText = p.randomize ? '🎲 ВКЛ' : 'Выкл';
+        const toggleClass = p.randomize ? 'toggle-switch active' : 'toggle-switch';
+        
+        tbody.innerHTML += `
+            <tr>
+                <td class="rank-cell ${rankClass}">${p.rank}</td>
+                <td class="uid-cell">${p.uid}</td>
+                <td class="name-cell">${p.name}</td>
+                <td>$${p.deposit.toLocaleString()}</td>
+                <td>$${p.balance.toLocaleString()}</td>
+                <td class="${p.profit >= 0 ? 'profit-cell' : 'loss-cell'}">$${p.profit.toLocaleString()}</td>
+                <td class="${p.returnPct >= 0 ? 'profit-cell' : 'loss-cell'}">${p.returnPct >= 0 ? '+' : ''}${p.returnPct}%</td>
+                <td>
+                    <div class="${toggleClass}" onclick="toggleRandomize('${p.uid}')"></div>
+                    <span class="status-badge ${randomClass}" style="margin-left: 8px;">${randomText}</span>
+                </td>
+                <td>
+                    <button class="btn btn-ghost btn-icon" onclick="editParticipant('${p.uid}')">✏️</button>
+                    <button class="btn btn-ghost btn-icon" onclick="removeFromTop('${p.uid}')">❌</button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+function toggleRandomize(uid) {
+    const p = participants.find(x => x.uid === uid);
+    if (!p) return;
+    
+    p.randomize = !p.randomize;
+    renderTop10Editor();
+    
+    const status = p.randomize ? 'включена' : 'выключена';
+    showToast(`🎲 Рандомизация ${p.name}: ${status}`, p.randomize ? 'success' : 'warning');
+}
+
+function addToTopFromSearch() {
+    const uid = document.getElementById('add-to-top-search').value.trim();
+    const p = participants.find(x => x.uid === uid);
+    
+    if (!p) {
+        showToast('❌ UID не найден', 'error');
+        return;
+    }
+    if (p.status === 'top') {
+        showToast('️ Уже в Топ-10', 'warning');
+        return;
+    }
+    
+    p.status = 'top';
+    p.rank = 10;
+    p.randomize = false;
+    
+    renderTop10Editor();
+    renderParticipants();
+    showToast(`✅ ${p.name} добавлен в Топ-10`, 'success');
+    document.getElementById('add-to-top-search').value = '';
+}
+
+function removeFromTop(uid) {
+    const p = participants.find(x => x.uid === uid);
+    if (!p) return;
+    
+    p.status = 'active';
+    p.rank = participants.filter(x => x.status !== 'top').length + 1;
+    
+    renderTop10Editor();
+    renderParticipants();
+    showToast(`⚠️ ${p.name} удалён из Топ-10`, 'warning');
+}
+
+function saveTop10() {
+    showToast('💾 Топ-10 сохранён', 'success');
+}
+
+// ===== RANKING =====
+function renderRanking() {
+    const tbody = document.getElementById('ranking-table');
+    tbody.innerHTML = '';
+    const sorted = [...participants].sort((a, b) => b.returnPct - a.returnPct);
+    
+    sorted.slice(0, 20).forEach((p, i) => {
+        const rankClass = i < 3 ? `rank-${i+1}` : '';
+        tbody.innerHTML += `
+            <tr>
+                <td class="rank-cell ${rankClass}">${i + 1}</td>
+                <td class="uid-cell">${p.uid}</td>
+                <td class="name-cell">${p.name}</td>
+                <td>$${p.deposit.toLocaleString()}</td>
+                <td>$${p.balance.toLocaleString()}</td>
+                <td class="${p.profit >= 0 ? 'profit-cell' : 'loss-cell'}">$${p.profit.toLocaleString()}</td>
+                <td class="${p.returnPct >= 0 ? 'profit-cell' : 'loss-cell'}">${p.returnPct >= 0 ? '+' : ''}${p.returnPct}%</td>
+            </tr>
+        `;
+    });
+}
+
+// ===== CHANGE LOG =====
+function renderChangeLog() {
+    const container = document.getElementById('change-log-list');
+    if (changeLog.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-dim); text-align: center; padding: 40px;">История пуста</p>';
+        return;
+    }
+    container.innerHTML = changeLog.map(log => `
+        <div style="padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px; margin-bottom: 8px; border-left: 3px solid var(--neon-cyan);">
+            <div style="font-size: 11px; color: var(--text-dim);">${log.time}</div>
+            <div style="font-size: 13px; margin-top: 4px;"><b style="color: var(--neon-cyan);">${log.name}</b> (${log.uid}) — ${log.changes}</div>
+        </div>
+    `).join('');
+}
+
+function clearChangeLog() {
+    if (confirm('Очистить историю?')) {
+        changeLog = [];
+        renderChangeLog();
+        showToast('🗑️ История очищена', 'warning');
+    }
+}
+
+// ===== DAY CONTROL =====
+function takeSnapshot() { showToast('📸 Snapshot создан', 'success'); }
+function recalculateRanking() { showToast('🔄 Рейтинг пересчитан', 'success'); }
+function sendTelegramUpdate() { showToast('📤 Отправлено в Telegram', 'success'); }
+function closeDay() { if (confirm('Закрыть день?')) showToast('🔒 День закрыт', 'success'); }
+
+// ===== UTILS =====
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    const icons = { success: '✅', error: '❌', warning: '⚠️' };
+    toast.innerHTML = `<span>${icons[type]}</span><span>${message}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 3500);
+}
+
+function refreshData() {
+    updateDashboard();
+    showToast('🔄 Данные обновлены', 'success');
+}
+
+function exportCSV() {
+    const csv = [
+        ['UID', 'Имя', 'Депозит', 'Баланс', 'Прибыль', 'Доходность', 'Статус', 'Место', 'Рандом'],
+        ...participants.map(p => [p.uid, p.name, p.deposit, p.balance, p.profit, p.returnPct, p.status, p.rank, p.randomize])
+    ].map(row => row.join(',')).join('\n');
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `participants_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    showToast('📥 CSV экспортирован', 'success');
+}
+
+// ===== INIT =====
+// Загружаем настройки рандомизации из localStorage
+const savedInterval = localStorage.getItem('randomizationInterval');
+if (savedInterval) {
+    randomizationSettings.intervalMinutes = parseFloat(savedInterval);
+}
+
+updateDashboard();
+</script>
+
+</body>
+</html>
