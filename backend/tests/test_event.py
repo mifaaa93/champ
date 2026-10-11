@@ -1,4 +1,5 @@
 from app.services.event import (
+    board_totals,
     merge_board,
     neighbor_window,
     overtake_events,
@@ -53,6 +54,19 @@ def test_merge_puts_real_above_dummy_when_dep_higher():
     assert [r["name"] for r in board] == ["Ахмед", "Тест", "Улугбек"]
     assert board[1]["dummy"] is False
     assert board[1]["rank"] == 2
+
+
+def test_board_totals_count_dummies_and_reals():
+    board = merge_board(
+        [
+            {"place": 1, "name": "Ахмед", "dep": 150000, "turn": 4_500_000},
+            {"place": 2, "name": "Равшан", "dep": 120000, "turn": 3_800_000},
+        ],
+        [{"uid": 141917235, "name": "Тест", "dep": 10000, "turn": 2000}],
+    )
+    players, turnover = board_totals(board)
+    assert players == 3
+    assert turnover == 4_500_000 + 3_800_000 + 2000
 
 
 def test_overtake_dummy_emits_feed_event():

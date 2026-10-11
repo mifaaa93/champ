@@ -145,6 +145,12 @@ def overtake_events(old: list[dict], new: list[dict]) -> list[dict]:
     return events
 
 
+def board_totals(board: list[dict]) -> tuple[int, float]:
+    players = len(board)
+    turnover = sum(float(r.get("turn") or 0) for r in board)
+    return players, turnover
+
+
 def activity_time_label(ts: float, now: float) -> str:
     sec = max(0, int(now - ts))
     if sec < 45:
@@ -248,13 +254,14 @@ async def public_event(session: AsyncSession) -> dict:
         end = (now_champ() + timedelta(days=14)).isoformat()
     board, live = await refresh_event_board(session)
     now = now_champ().timestamp()
+    players, turnover = board_totals(board)
     return {
         "name": cfg.get("event_name") or "PO TOURNAMENT",
         "event_end": end,
         "prize_pool": float(cfg.get("prize_pool") or 0),
         "prize_table": cfg.get("prize_table") or [],
-        "stats_players": int(cfg.get("stats_players") or 0),
-        "stats_turnover": float(cfg.get("stats_turnover") or 0),
+        "stats_players": players,
+        "stats_turnover": turnover,
         "telegram_channel_url": cfg.get("telegram_channel_url") or "",
         "rami_url": cfg.get("rami_url") or "",
         "rules": cfg.get("event_rules") or [],
@@ -384,11 +391,12 @@ def _format_activity(live: list[dict], seeded: list[dict], now: float) -> list[d
     return out[:8]
 
 
-def _profile_payload(ranked: list[dict], uid: int, stats_players: int) -> dict | None:
+def _profile_payload(ranked: list[dict], uid: int, stats_players: int | None = None) -> dict | None:
     me = next((r for r in ranked if int(r["uid"]) == int(uid)), None)
     if me is None:
         return None
-    total = max(stats_players, len(ranked), me["rank"])
+    total = stats_players if stats_players is not None else len(ranked)
+    total = max(total, len(ranked), me["rank"])
     beaten = max(0, total - me["rank"])
     neighbors = []
     for row in neighbor_window(ranked, uid, 2):
@@ -439,7 +447,7 @@ async def lookup_event_uid(session: AsyncSession, uid: int) -> dict:
         pass
     cfg = await get_settings(session)
     board, _live = await refresh_event_board(session)
-    profile = _profile_payload(board, uid, int(cfg.get("stats_players") or 0))
+    profile = _profile_payload(board, uid)
     return {"uid": uid, "status": "ok", "you": profile}
 
 
@@ -480,16 +488,17 @@ async def register_event_name(
 
     cfg = await get_settings(session)
     board, _live = await refresh_event_board(session)
-    profile = _profile_payload(board, uid, int(cfg.get("stats_players") or 0))
+    profile = _profile_payload(board, uid)
     if profile is None:
+        total = max(1, len(board))
         profile = {
             "uid": uid,
             "name": nick,
-            "rank": 1,
+            "rank": total,
             "dep": 0.0,
             "turn": 0.0,
-            "beaten": int(cfg.get("stats_players") or 0),
-            "total": int(cfg.get("stats_players") or 1),
+            "beaten": 0,
+            "total": total,
             "neighbors": [
                 {"rank": 1, "uid": uid, "name": nick, "dep": 0.0, "is_you": True}
             ],
@@ -505,7 +514,7 @@ async def invite_preview(session: AsyncSession, uid: int) -> dict:
         raise HTTPException(404, "not found")
     cfg = await get_settings(session)
     board, _live = await refresh_event_board(session)
-    profile = _profile_payload(board, uid, int(cfg.get("stats_players") or 0))
+    profile = _profile_payload(board, uid)
     if not profile:
         raise HTTPException(404, "not found")
     return {

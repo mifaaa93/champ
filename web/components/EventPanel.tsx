@@ -11,8 +11,6 @@ type EventForm = {
   event_end: string;
   prize_pool: number;
   prize_table: PrizeRow[];
-  stats_players: number;
-  stats_turnover: number;
   telegram_channel_url: string;
   rami_url: string;
   event_rules: string;
@@ -51,8 +49,6 @@ export function EventPanel({
           event_end: String(s.event_end || ""),
           prize_pool: Number(s.prize_pool || 0),
           prize_table: (s.prize_table as PrizeRow[]) || [],
-          stats_players: Number(s.stats_players || 0),
-          stats_turnover: Number(s.stats_turnover || 0),
           telegram_channel_url: String(s.telegram_channel_url || ""),
           rami_url: String(s.rami_url || ""),
           event_rules: ((s.event_rules as string[]) || []).join("\n"),
@@ -91,8 +87,6 @@ export function EventPanel({
           amount: Number(p.amount),
           suffix: p.suffix || "",
         })),
-        stats_players: Number(form.stats_players),
-        stats_turnover: Number(form.stats_turnover),
         telegram_channel_url: form.telegram_channel_url,
         rami_url: form.rami_url,
         event_rules: form.event_rules
@@ -157,22 +151,6 @@ export function EventPanel({
               type="number"
               value={form.prize_pool}
               onChange={(e) => setForm({ ...form, prize_pool: Number(e.target.value) })}
-            />
-          </label>
-          <label>
-            Участников (витрина)
-            <input
-              type="number"
-              value={form.stats_players}
-              onChange={(e) => setForm({ ...form, stats_players: Number(e.target.value) })}
-            />
-          </label>
-          <label>
-            Общий оборот, $
-            <input
-              type="number"
-              value={form.stats_turnover}
-              onChange={(e) => setForm({ ...form, stats_turnover: Number(e.target.value) })}
             />
           </label>
           <label>
@@ -302,7 +280,10 @@ export function EventPanel({
 
       <form className="form wide card" onSubmit={(e) => void saveTop(e)}>
         <h2>Витрина топ-10</h2>
-        <p className="note">Эти имена на главной. Можно подставить реального лида в любой момент.</p>
+        <p className="note">
+          Имена и цифры пустышек на главной. Участники и общий оборот считаются сами: пустышки + кто
+          зарегистрировался.
+        </p>
         {top.map((row, i) => (
           <div className="form-grid" key={row.place}>
             <label>
