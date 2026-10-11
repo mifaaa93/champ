@@ -566,7 +566,7 @@
         }
 
         /* RESULT */
-        .result-section { display: none; margin-bottom: 60px; animation: slideUp 0.6s ease; }
+        .result-section { margin-bottom: 60px; animation: slideUp 0.6s ease; }
         @keyframes slideUp {
             from { opacity: 0; transform: translateY(30px); }
             to { opacity: 1; transform: translateY(0); }
@@ -923,4 +923,4 @@
     text-decoration: none;
     text-align: center;
 }
-.po .result-section { margin-bottom: 60px; animation: slideUp 0.6s ease; }
+.po .result-section { display: block; margin-bottom: 60px; animation: slideUp 0.6s ease; }

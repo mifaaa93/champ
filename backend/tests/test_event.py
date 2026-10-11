@@ -1,4 +1,10 @@
-from app.services.event import neighbor_window, sort_by_dep, turnover_from_info
+from app.services.event import (
+    merge_board,
+    neighbor_window,
+    overtake_events,
+    sort_by_dep,
+    turnover_from_info,
+)
 from app.schemas import EventRegisterIn, SettingsPatch
 from pydantic import ValidationError
 import pytest
@@ -34,6 +40,32 @@ def test_event_register_uid_must_be_9_or_10_digits():
     with pytest.raises(ValidationError):
         EventRegisterIn(uid=12345678, nickname="Rami")
     EventRegisterIn(uid=123456789, nickname="Rami")
+
+
+def test_merge_puts_real_above_dummy_when_dep_higher():
+    board = merge_board(
+        [
+            {"place": 1, "name": "Ахмед", "dep": 150000, "turn": 1},
+            {"place": 2, "name": "Улугбек", "dep": 35000, "turn": 1},
+        ],
+        [{"uid": 141917235, "name": "Тест", "dep": 40000, "turn": 0}],
+    )
+    assert [r["name"] for r in board] == ["Ахмед", "Тест", "Улугбек"]
+    assert board[1]["dummy"] is False
+    assert board[1]["rank"] == 2
+
+
+def test_overtake_dummy_emits_feed_event():
+    old = merge_board(
+        [{"place": 1, "name": "Ахмед", "dep": 100, "turn": 0}, {"place": 2, "name": "Тимур", "dep": 50, "turn": 0}],
+        [{"uid": 141917235, "name": "Тест", "dep": 10, "turn": 0}],
+    )
+    new = merge_board(
+        [{"place": 1, "name": "Ахмед", "dep": 100, "turn": 0}, {"place": 2, "name": "Тимур", "dep": 50, "turn": 0}],
+        [{"uid": 141917235, "name": "Тест", "dep": 80, "turn": 0}],
+    )
+    events = overtake_events(old, new)
+    assert any(e["action"] == "обогнал" and e["extra"] == "Тимур" for e in events)
 
 
 def test_settings_accepts_event_fields():

@@ -34,6 +34,9 @@ async def job_snapshots() -> None:
     async with SessionLocal() as session:
         result = await snapshot_watchlist(session)
         log.info("snapshots %s", result)
+        from app.services.event import refresh_event_board
+
+        await refresh_event_board(session)
 
 
 def _pack(seq, *, loss: bool = False):

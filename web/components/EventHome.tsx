@@ -6,9 +6,9 @@ import { apiPath } from "@/lib/api";
 import "@/app/event.css";
 
 type PrizeRow = { place: string; amount: number; suffix?: string };
-type TopRow = { place: number; name: string; dep: number; turn: number };
+type TopRow = { place: number; name: string; dep: number; turn: number; dummy?: boolean };
 type Activity = { name: string; action: string; rank?: number | null; extra?: string; time?: string };
-type Neighbor = { rank: number; uid: number; name: string; dep: number; is_you: boolean };
+type Neighbor = { rank: number; uid: number; name: string; dep: number; is_you: boolean; dummy?: boolean };
 type Profile = {
   uid: number;
   name: string;
@@ -44,6 +44,40 @@ function money(n: number) {
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
+}
+
+function activityLine(act: Activity) {
+  if (act.action === "обогнал" && act.extra) {
+    return (
+      <>
+        <b>{act.name}</b> обогнал <b>{act.extra}</b>
+        {act.rank ? (
+          <>
+            {" "}
+            и поднялся на <b>#{act.rank}</b>
+          </>
+        ) : null}
+      </>
+    );
+  }
+  if (act.action === "поднялся на" && act.rank) {
+    return (
+      <>
+        <b>{act.name}</b> поднялся на <b>#{act.rank}</b> место
+      </>
+    );
+  }
+  return (
+    <>
+      <b>{act.name}</b> {act.action}{" "}
+      {act.rank ? (
+        <>
+          <b>#{act.rank}</b>
+        </>
+      ) : null}
+      {act.extra ? <b> {act.extra}</b> : null}
+    </>
+  );
 }
 
 function detailText(detail: unknown): string {
@@ -162,8 +196,9 @@ export function EventHome() {
   async function applyProfile(you: Profile) {
     setProfile(you);
     setModal(null);
+    void load().catch(() => {});
     requestAnimationFrame(() => {
-      document.getElementById("result-section")?.scrollIntoView({ behavior: "smooth" });
+      document.getElementById("result-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
@@ -198,7 +233,9 @@ export function EventHome() {
       }
       if (st === "ok" && (body as { you?: Profile }).you) {
         await applyProfile((body as { you: Profile }).you);
+        return;
       }
+      setLookupErr("Не удалось найти результат. Попробуй ещё раз.");
     } catch {
       setLookupErr("Проверка временно недоступна. Попробуй ещё раз.");
     } finally {
@@ -344,18 +381,10 @@ export function EventHome() {
             <div style={{ fontSize: 11, color: "var(--text-dim)" }}>Обновляется в реальном времени</div>
           </div>
           <div className="activity-list">
-            {(data?.activity || []).slice(0, 5).map((act, i) => (
-              <div className="activity-item" key={`${act.name}-${i}`}>
+            {(data?.activity || []).slice(0, 8).map((act, i) => (
+              <div className="activity-item" key={`${act.name}-${act.action}-${i}`}>
                 <span className="activity-avatar">👤</span>
-                <span className="activity-text">
-                  <b>{act.name}</b> {act.action}{" "}
-                  {act.rank ? (
-                    <>
-                      <b>#{act.rank}</b> место
-                    </>
-                  ) : null}
-                  {act.extra ? <b> {act.extra}</b> : null}
-                </span>
+                <span className="activity-text">{activityLine(act)}</span>
                 <span className="activity-time">{act.time}</span>
               </div>
             ))}
@@ -374,7 +403,7 @@ export function EventHome() {
               <div className="rank">{row.place}</div>
               <div className="info">
                 <div className="name">{row.name}</div>
-                <div className="id">ID: HIDDEN</div>
+                <div className="id">{row.dummy === false ? "LIVE" : "ID: HIDDEN"}</div>
               </div>
               <div className="dep">{money(row.dep)}</div>
             </div>
@@ -413,21 +442,24 @@ export function EventHome() {
             Введи свой уникальный ID от Pocket Option, чтобы узнать свой ранг, статистику и место в
             турнирной таблице.
           </p>
-          <div className="search-wrapper">
+          <form
+            className="search-wrapper"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void search();
+            }}
+          >
             <input
               className="search-input"
               value={uid}
               onChange={(e) => setUid(e.target.value.replace(/\D/g, "").slice(0, 10))}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void search();
-              }}
               placeholder="Введите ваш ID..."
               inputMode="numeric"
             />
-            <button type="button" className="search-btn" onClick={() => void search()} disabled={busy}>
-              {busy ? "…" : "ПОИСК"}
+            <button type="submit" className="search-btn" disabled={busy}>
+              {busy ? "ПРОВЕРЯЕМ…" : "ПОИСК"}
             </button>
-          </div>
+          </form>
           <p className="hint">* ID в Pocket Option состоит из 9–10 цифр.</p>
           {lookupErr ? <p className="hint" style={{ color: "#ff6b7d" }}>{lookupErr}</p> : null}
         </div>
@@ -475,7 +507,7 @@ export function EventHome() {
                       {n.name}
                       {n.is_you ? " (ВЫ)" : ""}
                     </div>
-                    <div className="n-id">{n.uid}</div>
+                    <div className="n-id">{n.dummy || !n.uid ? "ID: HIDDEN" : n.uid}</div>
                   </div>
                   <div className="n-dep">{money(n.dep)}</div>
                 </div>
