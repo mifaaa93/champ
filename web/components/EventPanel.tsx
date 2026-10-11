@@ -217,9 +217,12 @@ export function EventPanel({
   }
 
   function patchPrize(i: number, patch: Partial<PrizeRow>) {
-    const prize_table = form.prize_table.slice();
-    prize_table[i] = { ...prize_table[i], ...patch };
-    setForm({ ...form, prize_table });
+    setForm((prev) => {
+      if (!prev) return prev;
+      const prize_table = prev.prize_table.slice();
+      prize_table[i] = { ...prize_table[i], ...patch };
+      return { ...prev, prize_table };
+    });
   }
 
   const intervalSec = Math.round((Number(form.dummy_tick_minutes) || 1) * 60);
