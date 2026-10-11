@@ -9,9 +9,9 @@ export default function RatingPage() {
     <>
     <Nav />
     <main className="wrap">
-      <div className="kicker">LIVE BOARD</div>
-      <h1>Рейтинг дня</h1>
-      <p className="lead">Топ обновляется со снимков баланса. Вывод в течение суток снижает место в доходности.</p>
+      <div className="kicker">DAY</div>
+      <h1>Доходность и просадка</h1>
+      <p className="lead">Открытые метрики того же чемпионата за текущие сутки UTC+2.</p>
       <Lookup />
       <Board />
     </main>

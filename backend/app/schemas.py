@@ -81,6 +81,8 @@ class SettingsPatch(BaseModel):
     rami_url: str | None = Field(default=None, max_length=300)
     event_rules: list[str] | None = None
     activity: list[dict] | None = None
+    tg_bot_token: str | None = Field(default=None, max_length=200)
+    tg_chat_id: str | None = Field(default=None, max_length=80)
 
     @field_validator("prize_yield")
     @classmethod

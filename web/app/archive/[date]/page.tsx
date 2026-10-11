@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Nav } from "@/components/Nav";
 import { api } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -84,6 +85,8 @@ export default async function ArchiveDayPage({ params }: { params: Promise<{ dat
   }
   if (!data) {
     return (
+      <>
+      <Nav />
       <main className="wrap">
         <p>
           <Link href="/archive">← Архив</Link>
@@ -91,9 +94,12 @@ export default async function ArchiveDayPage({ params }: { params: Promise<{ dat
         <h1>{date}</h1>
         <p className="note">День ещё не зафиксирован.</p>
       </main>
+      </>
     );
   }
   return (
+    <>
+    <Nav />
     <main className="wrap">
       <p>
         <Link href="/archive">← Архив</Link>
@@ -120,5 +126,6 @@ export default async function ArchiveDayPage({ params }: { params: Promise<{ dat
         </div>
       </div>
     </main>
+    </>
   );
 }

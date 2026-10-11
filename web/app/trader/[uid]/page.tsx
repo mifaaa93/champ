@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { TraderCard, type TraderPayload } from "@/components/TraderCard";
+import { PoRoot, TraderCard, type TraderPayload } from "@/components/TraderCard";
 import { api } from "@/lib/api";
+import "@/app/event.css";
 
 export const dynamic = "force-dynamic";
 
@@ -13,32 +14,35 @@ export default async function TraderPage({
 }) {
   const { uid } = await params;
   const { from } = await searchParams;
-  const backHref = from === "admin" ? "/admin#users" : "/rating";
-  const backLabel = from === "admin" ? "← К списку зарегистрированных" : "← К рейтингу";
+  const backHref = from === "admin" ? "/admin#participants" : "/";
+  const backLabel = from === "admin" ? "← К участникам" : "← К чемпионату";
   let data: TraderPayload | null = null;
   try {
     data = (await api.trader(uid)) as TraderPayload;
   } catch {
     data = null;
   }
-  if (!data) {
-    return (
-      <main className="wrap">
-        <p>
-          <Link href={backHref}>{backLabel}</Link>
-        </p>
-        <h1>UID {uid}</h1>
-        <p className="note">Нет в рейтинге. Нужна регистрация.</p>
-      </main>
-    );
-  }
   return (
-    <main className="wrap">
-      <p>
-        <Link href={backHref}>{backLabel}</Link>
-      </p>
-      <div className="kicker">TRADER</div>
-      <TraderCard data={data} canEdit={from === "admin"} />
+    <PoRoot>
+    <main className="po">
+      <div className="container">
+        <p>
+          <Link className="help-link" href={backHref}>
+            {backLabel}
+          </Link>
+        </p>
+        {data ? (
+          <TraderCard data={data} canEdit={from === "admin"} />
+        ) : (
+          <>
+            <h1 className="section-title" style={{ textAlign: "left" }}>
+              UID {uid}
+            </h1>
+            <p className="note">Нет в рейтинге. Нужна регистрация.</p>
+          </>
+        )}
+      </div>
     </main>
+    </PoRoot>
   );
 }

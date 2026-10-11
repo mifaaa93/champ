@@ -144,6 +144,10 @@ ATTR_RE = re.compile(r'([a-zA-Z_:][-a-zA-Z0-9_:]*)\s*=\s*("([^"]*)"|\'([^\']*)\'
 ENTITY_RE = re.compile(r"^&(?:#x[0-9a-fA-F]+|#\d+|[a-zA-Z][a-zA-Z0-9]+);")
 
 
+class TelegramSendError(RuntimeError):
+    pass
+
+
 class TelegramHtmlError(ValueError):
     def __init__(self, errors: list[str]) -> None:
         super().__init__("; ".join(errors))
@@ -268,19 +272,21 @@ def telegram_html_to_preview(text: str) -> str:
     return "".join(parts)
 
 
-async def send_message(text: str) -> bool:
+async def send_message(text: str, token: str = "", chat_id: str = "") -> bool:
     errors = validate_telegram_html(text)
     if errors:
         raise TelegramHtmlError(errors)
-    if not settings.tg_bot_token or not settings.tg_chat_id:
+    token = (token or settings.tg_bot_token or "").strip()
+    chat_id = (chat_id or settings.tg_chat_id or "").strip()
+    if not token or not chat_id:
         log.info("telegram skipped: token or chat_id empty")
         return False
-    url = f"https://api.telegram.org/bot{settings.tg_bot_token}/sendMessage"
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
     async with httpx.AsyncClient(timeout=20.0) as client:
         resp = await client.post(
             url,
             json={
-                "chat_id": settings.tg_chat_id,
+                "chat_id": chat_id,
                 "text": text,
                 "parse_mode": "HTML",
                 "disable_web_page_preview": True,

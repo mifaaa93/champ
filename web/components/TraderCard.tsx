@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiPath } from "@/lib/api";
 
 const TOKEN_KEY = "ibcup_admin_token";
@@ -47,6 +47,18 @@ export type TraderPayload = {
   } | null;
 };
 
+export function PoRoot({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    document.documentElement.classList.add("po-root");
+    document.body.classList.add("po-root");
+    return () => {
+      document.documentElement.classList.remove("po-root");
+      document.body.classList.remove("po-root");
+    };
+  }, []);
+  return children;
+}
+
 export function TraderCard({ data, canEdit }: { data: TraderPayload; canEdit: boolean }) {
   const l = data.ledger;
   const [nickname, setNickname] = useState(data.nickname || "");
@@ -91,42 +103,59 @@ export function TraderCard({ data, canEdit }: { data: TraderPayload; canEdit: bo
     }
   }
 
+  const pnl = l?.pnl ?? 0;
+  const ret = l?.return_pct ?? 0;
+
   return (
     <>
-      <h1>{nickname || data.uid}</h1>
-      <p className="note">
-        {data.registered ? "Зарегистрирован на сайте" : "Нет регистрации"}
-        {data.country ? ` · ${data.country}` : ""}
-        {telegram ? ` · @${telegram}` : ""}
-      </p>
+      <div className="profile-head">
+        <div>
+          <div className="profile-name">{nickname || data.uid}</div>
+          <p className="profile-sub">
+            UID {data.uid}
+            {data.registered ? " · в чемпионате" : " · нет регистрации"}
+            {data.country ? ` · ${data.country}` : ""}
+            {telegram ? ` · @${telegram}` : ""}
+          </p>
+        </div>
+        {l ? (
+          <span className={`status-badge ${l.eligible ? "status-active" : "status-withdraw"}`}>
+            {l.eligible ? "в зачёте" : l.dq_reason || "вне зачёта"}
+          </span>
+        ) : null}
+      </div>
+
       {canEdit && data.registered ? (
-        <form className="form card" onSubmit={save} style={{ marginBottom: 18 }}>
+        <form className="profile-panel" onSubmit={save}>
           <h3>Профиль</h3>
-          <label>
-            Ник
-            <input value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={32} />
-          </label>
-          <label>
-            Telegram
-            <input
-              value={telegram}
-              onChange={(e) => setTelegram(e.target.value)}
-              maxLength={64}
-              placeholder="@username"
-            />
-          </label>
-          <div className="actions">
-            <button className="cta" type="submit" disabled={busy}>
-              {busy ? "Сохраняем…" : "Сохранить ник и Telegram"}
+          <div className="form-row">
+            <label className="form-group">
+              <span className="form-label">Ник</span>
+              <input className="form-input" value={nickname} onChange={(e) => setNickname(e.target.value)} maxLength={32} />
+            </label>
+            <label className="form-group">
+              <span className="form-label">Telegram</span>
+              <input
+                className="form-input"
+                value={telegram}
+                onChange={(e) => setTelegram(e.target.value)}
+                maxLength={64}
+                placeholder="@username"
+              />
+            </label>
+          </div>
+          <div className="profile-actions">
+            <button className="btn btn-success" type="submit" disabled={busy}>
+              {busy ? "Сохраняем…" : "Сохранить"}
             </button>
             <button
-              className="cta ghost"
+              className="btn btn-danger"
               type="button"
               disabled={busy}
               onClick={async () => {
                 if (
                   !window.confirm(
-                    `Удалить ${data.uid} из чемпионата?\nОн пропадёт из рейтинга. Снимки и архив дней останутся.`
+                    `Удалить ${data.uid} из чемпионата?\nОн пропадёт из рейтинга. Снимки и архив дней останутся.`,
                   )
                 ) {
                   return;
@@ -143,7 +172,7 @@ export function TraderCard({ data, canEdit }: { data: TraderPayload; canEdit: bo
                   });
                   const body = await res.json();
                   if (!res.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Не удалилось");
-                  router.push("/admin#users");
+                  router.push("/admin#participants");
                 } catch (e) {
                   setErr(e instanceof Error ? e.message : "ошибка");
                   setBusy(false);
@@ -157,38 +186,51 @@ export function TraderCard({ data, canEdit }: { data: TraderPayload; canEdit: bo
           {err ? <p className="err">{err}</p> : null}
         </form>
       ) : null}
+
       {l ? (
-        <section className="grid-2">
-          <article className="card">
-            <h3>Сегодня · {data.day}</h3>
-            <p className="mono">Баланс ${l.balance.toFixed(2)}</p>
-            <p className="mono">
-              Старт ${l.start_balance.toFixed(2)} · {champWhen(l.start_ts)} UTC+2
-            </p>
-            <p className="mono">База расчёта {l.basis != null ? `$${l.basis.toFixed(2)}` : "—"}</p>
-            <p className={`mono ${l.pnl >= 0 ? "up" : "down"}`}>PnL рейтинга ${l.pnl.toFixed(2)}</p>
-            <p className="mono">{l.return_pct.toFixed(2)}%</p>
-            <p className={`mono ${(l.trading_pnl ?? l.pnl) >= 0 ? "up" : "down"}`}>
-              Торговый PnL ${(l.trading_pnl ?? l.pnl).toFixed(2)}
+        <>
+          <div className="profile-grid">
+            <div className="profile-stat">
+              <span>Депозит дня</span>
+              <b>${l.deposits.toFixed(2)}</b>
+            </div>
+            <div className="profile-stat">
+              <span>Баланс</span>
+              <b>${l.balance.toFixed(2)}</b>
+            </div>
+            <div className="profile-stat">
+              <span>Прибыль</span>
+              <b className={pnl >= 0 ? "up" : "down"}>${pnl.toFixed(2)}</b>
+            </div>
+            <div className="profile-stat">
+              <span>Доходность</span>
+              <b className={ret >= 0 ? "up" : "down"}>
+                {ret >= 0 ? "+" : ""}
+                {ret.toFixed(2)}%
+              </b>
+            </div>
+          </div>
+          <div className="profile-panel">
+            <h3>Сегодня · {data.day} · UTC+2</h3>
+            <p className="note">
+              Старт ${l.start_balance.toFixed(2)} · {champWhen(l.start_ts)}. База расчёта{" "}
+              {l.basis != null ? `$${l.basis.toFixed(2)}` : "—"}. Торговый PnL $
+              {(l.trading_pnl ?? l.pnl).toFixed(2)}.
             </p>
             <p className="note">
-              Доходность считает PnL с выводом (вывел — место падает). Просадка считает только
-              торговлю. Точка 0 — первый снимок после депозита дня, не полночь.
+              Вывод за сутки ${l.withdrawals.toFixed(2)}. Бонусы ${l.bonuses.toFixed(2)}. Сделок {l.trades ?? "—"}.
+              Статус счёта {l.status || "—"}. Self-exclude {l.self_excluded ? "да" : "нет"}.
             </p>
-          </article>
-          <article className="card">
-            <h3>Движение и статус</h3>
-            <p className="mono">Депозит за сутки ${l.deposits.toFixed(2)}</p>
-            <p className="mono">Вывод за сутки ${l.withdrawals.toFixed(2)}</p>
-            <p className="mono">Бонусы с точки 0 ${l.bonuses.toFixed(2)}</p>
-            <p className="mono">Сделок {l.trades ?? "—"}</p>
-            <p className="mono">Статус счёта {l.status || "—"}</p>
-            <p className="mono">Self-exclude {l.self_excluded ? "да" : "нет"}</p>
-            <p className="mono">Регистрация {champWhen(data.registered_at, true)}</p>
-            <p className="mono">Последняя проверка UID {champWhen(data.last_checked_at, true)} UTC+2</p>
-            <p className="note">{l.eligible ? "в зачёте" : l.dq_reason}</p>
-          </article>
-        </section>
+            <p className="note">
+              Регистрация {champWhen(data.registered_at, true)}. Последняя проверка{" "}
+              {champWhen(data.last_checked_at, true)}.
+            </p>
+            <p className="note">
+              Доходность считает PnL с выводом. Просадка считает только торговлю. Точка 0 — первый снимок после
+              депозита дня.
+            </p>
+          </div>
+        </>
       ) : (
         <p className="note">Снимка за сегодня ещё нет.</p>
       )}

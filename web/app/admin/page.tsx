@@ -35,6 +35,9 @@ type Settings = {
   tg_final_header: string;
   tg_final_yield_row: string;
   tg_final_loss_row: string;
+  tg_chat_id: string;
+  tg_bot_configured?: boolean;
+  tg_bot_token_tail?: string;
 };
 
 type BoardRow = {
@@ -92,6 +95,9 @@ const empty: Settings = {
   tg_final_header: "<b>Итоги дня</b> · {day} UTC+2",
   tg_final_yield_row: "{place}. <code>{uid}</code>  приз {prize}",
   tg_final_loss_row: "{place}. <code>{uid}</code>  {prize}",
+  tg_chat_id: "",
+  tg_bot_configured: false,
+  tg_bot_token_tail: "",
 };
 
 const NAV: { id: Tab; icon: string; label: string; group: string }[] = [
@@ -134,6 +140,7 @@ export default function AdminPage() {
   const [usersDay, setUsersDay] = useState("");
   const [tab, setTab] = useState<Tab>("dashboard");
   const [event, setEvent] = useState<PublicEvent | null>(null);
+  const [botToken, setBotToken] = useState("");
 
   useEffect(() => {
     const saved = sessionStorage.getItem(TOKEN_KEY);
@@ -305,7 +312,17 @@ export default function AdminPage() {
         tg_final_header: form.tg_final_header,
         tg_final_yield_row: form.tg_final_yield_row,
         tg_final_loss_row: form.tg_final_loss_row,
+        tg_chat_id: form.tg_chat_id.trim(),
+        ...(botToken.trim() ? { tg_bot_token: botToken.trim() } : {}),
       });
+      if (botToken.trim()) {
+        setForm((prev) => ({
+          ...prev,
+          tg_bot_configured: true,
+          tg_bot_token_tail: botToken.trim().slice(-4),
+        }));
+        setBotToken("");
+      }
       setStatus("Сохранено. Worker подхватит на следующем цикле.");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "ошибка");
@@ -662,6 +679,35 @@ export default function AdminPage() {
             </div>
           </div>
           <form className="card" onSubmit={save}>
+            <div className="card-header">
+              <div className="card-title">Подключение бота</div>
+              <span className="card-badge badge-live">
+                {form.tg_bot_configured ? `● токен …${form.tg_bot_token_tail || ""}` : "не задан"}
+              </span>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Токен бота</label>
+                <input
+                  className="form-input"
+                  type="password"
+                  autoComplete="new-password"
+                  value={botToken}
+                  placeholder={form.tg_bot_configured ? "оставь пустым, чтобы не менять" : "123456:ABC…"}
+                  onChange={(e) => setBotToken(e.target.value)}
+                />
+                <div className="form-hint">Хранится в настройках чемпионата. В публичные ответы не попадает.</div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">ID группы</label>
+                <input
+                  className="form-input"
+                  value={form.tg_chat_id}
+                  placeholder="-100… или @channel"
+                  onChange={(e) => patch("tg_chat_id", e.target.value)}
+                />
+              </div>
+            </div>
             <div className="form-row">
               <div className="form-group">
                 <label className="form-label">

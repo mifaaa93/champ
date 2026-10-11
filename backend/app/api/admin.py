@@ -12,7 +12,7 @@ from app.schemas import ProfilePatch, SettingsPatch, ShowcaseIn, day_cash, dec
 from app.services.event import list_showcase, save_showcase
 from app.services.freeze import freeze_day
 from app.services.poll import refresh_statistics, snapshot_watchlist
-from app.settings_service import get_settings, update_settings
+from app.settings_service import admin_view, get_settings, update_settings
 from app.timezone import dubai_today
 
 router = APIRouter(prefix="/admin")
@@ -31,7 +31,7 @@ async def require_admin(
 
 @router.get("/settings", dependencies=[Depends(require_admin)])
 async def read_settings(session: AsyncSession = Depends(get_session)) -> dict:
-    return await get_settings(session)
+    return admin_view(await get_settings(session))
 
 
 @router.patch("/settings", dependencies=[Depends(require_admin)])
@@ -39,7 +39,13 @@ async def patch_settings(
     body: SettingsPatch, session: AsyncSession = Depends(get_session)
 ) -> dict:
     patch = body.model_dump(exclude_none=True)
-    return await update_settings(session, patch)
+    token = patch.get("tg_bot_token")
+    if token is not None and not str(token).strip():
+        patch.pop("tg_bot_token", None)
+    chat = patch.get("tg_chat_id")
+    if isinstance(chat, str):
+        patch["tg_chat_id"] = chat.strip()
+    return admin_view(await update_settings(session, patch))
 
 
 @router.get("/showcase", dependencies=[Depends(require_admin)])
@@ -90,7 +96,7 @@ async def telegram_context(
 @router.post("/telegram-send", dependencies=[Depends(require_admin)])
 async def telegram_send(kind: str = Query("hourly")) -> dict:
     from app.jobs.runner import job_publish
-    from app.telegram import TelegramHtmlError
+    from app.telegram import TelegramHtmlError, TelegramSendError
 
     if kind not in {"hourly", "final"}:
         raise HTTPException(400, "kind: hourly или final")
@@ -98,6 +104,8 @@ async def telegram_send(kind: str = Query("hourly")) -> dict:
         await job_publish(kind, force=True)
     except TelegramHtmlError as exc:
         raise HTTPException(status_code=400, detail=exc.errors) from exc
+    except TelegramSendError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     label = "итогов дня" if kind == "final" else "часовой"
     return {"ok": True, "message": f"Пост {label} отправлен в группу"}
 

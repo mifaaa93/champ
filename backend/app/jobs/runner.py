@@ -15,6 +15,7 @@ from app.services.ranking import loss_pool, pick_winners, yield_pool
 from app.settings_service import get_settings, job_get, job_set
 from app.telegram import (
     TelegramHtmlError,
+    TelegramSendError,
     build_final_message,
     build_hourly_message,
     send_message,
@@ -238,12 +239,18 @@ async def job_publish(kind: str = "hourly", day=None, force: bool = False) -> No
             text = await compose_hourly(session, day)
 
         try:
-            sent = await send_message(text)
+            sent = await send_message(
+                text,
+                token=str(cfg.get("tg_bot_token") or ""),
+                chat_id=str(cfg.get("tg_chat_id") or ""),
+            )
         except TelegramHtmlError as exc:
             log.error("telegram html invalid: %s", exc.errors)
             if force:
                 raise
             sent = False
+        if force and not sent:
+            raise TelegramSendError("Telegram не отправлен. Проверь токен бота и ID группы.")
         session.add(
             PublishLog(
                 channel="telegram",

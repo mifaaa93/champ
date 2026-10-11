@@ -33,6 +33,8 @@ DEFAULTS: dict = {
     ],
     "stats_players": 14502,
     "stats_turnover": 2_400_000,
+    "tg_bot_token": "",
+    "tg_chat_id": "",
     "telegram_channel_url": "https://t.me/your_channel",
     "rami_url": "https://t.me/rami_username",
     "event_rules": [
@@ -96,6 +98,14 @@ async def get_settings(session: AsyncSession) -> dict:
     if merged.get("dummy_tick_minutes") is None:
         merged["dummy_tick_minutes"] = 1
         changed = True
+    from app.config import settings as env_settings
+
+    if not str(merged.get("tg_bot_token") or "").strip() and env_settings.tg_bot_token:
+        merged["tg_bot_token"] = env_settings.tg_bot_token
+        changed = True
+    if not str(merged.get("tg_chat_id") or "").strip() and env_settings.tg_chat_id:
+        merged["tg_chat_id"] = env_settings.tg_chat_id
+        changed = True
     seeded = {
         ("Александр", "поднялся на"),
         ("Дмитрий", "пополнил депозит на"),
@@ -111,6 +121,15 @@ async def get_settings(session: AsyncSession) -> dict:
         row.value = merged
         await session.commit()
     return merged
+
+
+def admin_view(cfg: dict) -> dict:
+    out = dict(cfg)
+    token = str(out.get("tg_bot_token") or "")
+    out["tg_bot_configured"] = bool(token.strip())
+    out["tg_bot_token_tail"] = token[-4:] if len(token) >= 4 else ""
+    out["tg_bot_token"] = ""
+    return out
 
 
 async def update_settings(session: AsyncSession, patch: dict) -> dict:

@@ -25,6 +25,22 @@ def test_day_cash_prefers_statistics_when_snapshot_missed_deposit():
     assert day_cash(Decimal("0"), Decimal("1177.36")) == Decimal("1177.36")
 
 
+def test_settings_accepts_telegram_credentials():
+    patch = SettingsPatch(tg_bot_token="123:abc", tg_chat_id="-1001")
+    assert patch.tg_bot_token == "123:abc"
+    assert patch.tg_chat_id == "-1001"
+
+
+def test_admin_view_hides_bot_token():
+    from app.settings_service import admin_view
+
+    view = admin_view({"tg_bot_token": "123456:SECRET99", "tg_chat_id": "-1", "top_n": 7})
+    assert view["tg_bot_token"] == ""
+    assert view["tg_bot_configured"] is True
+    assert view["tg_bot_token_tail"] == "ET99"
+    assert view["tg_chat_id"] == "-1"
+
+
 def test_settings_places_must_match_prizes():
     with pytest.raises(ValidationError):
         SettingsPatch(prize_places=3, prize_yield=[100, 50])

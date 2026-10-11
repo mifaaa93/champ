@@ -16,7 +16,7 @@ export default async function ArchivePage() {
     <Nav />
     <main className="wrap">
       <div className="kicker">ARCHIVE</div>
-      <h1>Закрытые дни</h1>
+      <h1>Архив дней</h1>
       <div className="card">
         {days.length === 0 ? (
           <p className="note">Пока нет зафиксированных итогов.</p>
