@@ -7,12 +7,27 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 NICK_RE = re.compile(r"^[\w.\- ]{1,32}$", re.UNICODE)
 TG_RE = re.compile(r"^[A-Za-z0-9_]{5,32}$")
+TG_LINK_RE = re.compile(r"^(?:https?://)?(?:www\.)?(?:t\.me|telegram\.me)/", re.IGNORECASE)
+
+
+def normalize_telegram(value: str) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    raw = raw.split("?")[0].split("#")[0].strip().strip("/")
+    raw = TG_LINK_RE.sub("", raw).strip().strip("/")
+    if raw.lower().startswith("s/"):
+        raw = raw[2:]
+    raw = raw.lstrip("@").strip().split("/")[0]
+    if raw and not TG_RE.fullmatch(raw):
+        raise ValueError("Telegram: ссылка t.me, @username или username (5–32 символа)")
+    return raw
 
 
 class RegisterIn(BaseModel):
     uid: int = Field(ge=100_000, le=9_999_999_999)
     nickname: str = Field(default="", max_length=32)
-    telegram: str = Field(default="", max_length=64)
+    telegram: str = Field(default="", max_length=200)
     website: str = Field(default="", max_length=200)
 
     @field_validator("nickname")
@@ -26,15 +41,12 @@ class RegisterIn(BaseModel):
     @field_validator("telegram")
     @classmethod
     def clean_tg(cls, value: str) -> str:
-        value = value.strip().lstrip("@")
-        if value and not TG_RE.fullmatch(value):
-            raise ValueError("Telegram: username без ссылки, 5–32 символа")
-        return value
+        return normalize_telegram(value)
 
 
 class ProfilePatch(BaseModel):
     nickname: str = Field(default="", max_length=32)
-    telegram: str = Field(default="", max_length=64)
+    telegram: str = Field(default="", max_length=200)
 
     @field_validator("nickname")
     @classmethod
@@ -123,6 +135,7 @@ class SettingsPatch(BaseModel):
 class EventRegisterIn(BaseModel):
     uid: int = Field(ge=100_000_000, le=9_999_999_999)
     nickname: str = Field(min_length=1, max_length=32)
+    telegram: str = Field(default="", max_length=200)
     website: str = Field(default="", max_length=200)
 
     @field_validator("nickname")
@@ -131,6 +144,14 @@ class EventRegisterIn(BaseModel):
         value = RegisterIn.clean_nick(value)
         if not value:
             raise ValueError("Введи имя")
+        return value
+
+    @field_validator("telegram")
+    @classmethod
+    def clean_tg(cls, value: str) -> str:
+        value = normalize_telegram(value)
+        if not value:
+            raise ValueError("Введи Telegram: ссылка, @username или username")
         return value
 
 

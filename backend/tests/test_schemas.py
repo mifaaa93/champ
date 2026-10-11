@@ -16,6 +16,16 @@ def test_register_rejects_bad_telegram():
         RegisterIn(uid=114653273, telegram="https://t.me/x")
 
 
+def test_register_accepts_telegram_link_at_and_plain():
+    from app.schemas import normalize_telegram
+
+    assert normalize_telegram("https://t.me/rami_user") == "rami_user"
+    assert normalize_telegram("https://t.me/rami_user/") == "rami_user"
+    assert normalize_telegram("@rami_user") == "rami_user"
+    assert normalize_telegram("rami_user") == "rami_user"
+    assert RegisterIn(uid=114653273, telegram="t.me/rami_user").telegram == "rami_user"
+
+
 def test_settings_rejects_percent_over_100():
     with pytest.raises(ValidationError):
         SettingsPatch(prize_places=3, prize_yield=[1, 1, 1], prize_loss_pct=[15, 10, 150])

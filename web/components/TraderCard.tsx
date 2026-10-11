@@ -139,8 +139,8 @@ export function TraderCard({ data, canEdit }: { data: TraderPayload; canEdit: bo
                 className="form-input"
                 value={telegram}
                 onChange={(e) => setTelegram(e.target.value)}
-                maxLength={64}
-                placeholder="@username"
+                maxLength={200}
+                placeholder="ссылка, @username или username"
               />
             </label>
           </div>

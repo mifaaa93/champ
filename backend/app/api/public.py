@@ -91,7 +91,7 @@ async def event_register(
                 "neighbors": [],
             },
         }
-    return await register_event_name(session, body.uid, body.nickname)
+    return await register_event_name(session, body.uid, body.nickname, body.telegram)
 
 
 @router.get("/event/invite/{uid}")

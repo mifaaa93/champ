@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { Nav } from "@/components/Nav";
+import { telegramError } from "@/lib/telegramUser";
 
 function detailText(detail: unknown): string {
   if (typeof detail === "string") return detail;
@@ -40,10 +41,8 @@ function RegisterForm() {
     if (nickname.trim() && !/^[\w.\- ]{1,32}$/u.test(nickname.trim())) {
       next.nickname = "Ник: буквы, цифры, пробел, точка, _ или -";
     }
-    const tg = telegram.trim().replace(/^@/, "");
-    if (tg && !/^[A-Za-z0-9_]{5,32}$/.test(tg)) {
-      next.telegram = "Telegram username, 5–32 символа";
-    }
+    const tgErr = telegramError(telegram, false);
+    if (tgErr) next.telegram = tgErr;
     setFieldErr(next);
     return Object.keys(next).length === 0;
   }
@@ -117,8 +116,8 @@ function RegisterForm() {
           <input
             value={telegram}
             onChange={(e) => setTelegram(e.target.value)}
-            maxLength={64}
-            placeholder="@username"
+            maxLength={200}
+            placeholder="https://t.me/username, @username или username"
           />
           {fieldErr.telegram ? <span className="field-err">{fieldErr.telegram}</span> : null}
         </label>

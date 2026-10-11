@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { apiPath } from "@/lib/api";
+import { telegramError } from "@/lib/telegramUser";
 import "@/app/event.css";
 
 type PrizeRow = { place: string; amount: number; suffix?: string };
@@ -170,6 +171,8 @@ export function EventHome() {
     null | "format" | "missing" | "name" | "prizes" | "rules" | "share" | "need_deposit"
   >(null);
   const [regName, setRegName] = useState("");
+  const [regTg, setRegTg] = useState("");
+  const [regErr, setRegErr] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [invite, setInvite] = useState<{ name: string; rank: number; dep: number } | null>(null);
   const [clock, setClock] = useState({ d: "00", h: "00", m: "00", s: "00" });
@@ -309,6 +312,8 @@ export function EventHome() {
       }
       if (st === "need_name") {
         setRegName("");
+        setRegTg("");
+        setRegErr("");
         setModal("name");
         return;
       }
@@ -339,13 +344,27 @@ export function EventHome() {
 
   async function registerName() {
     const name = regName.trim();
-    if (!name) return;
+    const tgErr = telegramError(regTg, true);
+    if (!name) {
+      setRegErr("Введи имя");
+      return;
+    }
+    if (tgErr) {
+      setRegErr(tgErr);
+      return;
+    }
+    setRegErr("");
     setBusy(true);
     try {
       const res = await fetch(apiPath("/public/event/register"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ uid: Number(uid.trim()), nickname: name, website: "" }),
+        body: JSON.stringify({
+          uid: Number(uid.trim()),
+          nickname: name,
+          telegram: regTg.trim(),
+          website: "",
+        }),
       });
       const body = await res.json().catch(() => ({}));
       if (res.status === 404) {
@@ -353,8 +372,7 @@ export function EventHome() {
         return;
       }
       if (!res.ok) {
-        setLookupErr(detailText((body as { detail?: unknown }).detail) || "Не удалось сохранить имя");
-        setModal(null);
+        setRegErr(detailText((body as { detail?: unknown }).detail) || "Не удалось сохранить");
         return;
       }
       const you = (body as { you?: Profile }).you;
@@ -364,8 +382,7 @@ export function EventHome() {
         await applyProfile(you, st);
       }
     } catch {
-      setLookupErr("Не удалось сохранить имя. Попробуй ещё раз.");
-      setModal(null);
+      setRegErr("Не удалось сохранить. Попробуй ещё раз.");
     } finally {
       setBusy(false);
     }
@@ -764,7 +781,7 @@ export function EventHome() {
       <div className={`modal-overlay${modal === "name" ? " active" : ""}`}>
         <div className="modal success">
           <h2>ДОБРО ПОЖАЛОВАТЬ!</h2>
-          <p>Ваш UID найден. Введите имя или никнейм для идентификации в рейтинге.</p>
+          <p>Ваш UID найден. Введите имя и Telegram: ссылка, @username или username.</p>
           <input
             className="modal-input"
             value={regName}
@@ -775,6 +792,16 @@ export function EventHome() {
             placeholder="Ваше имя / Никнейм"
             autoFocus
           />
+          <input
+            className="modal-input"
+            value={regTg}
+            onChange={(e) => setRegTg(e.target.value.slice(0, 200))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void registerName();
+            }}
+            placeholder="https://t.me/username или @username"
+          />
+          {regErr ? <p className="err">{regErr}</p> : null}
           <button type="button" className="modal-btn" onClick={() => void registerName()} disabled={busy}>
             ЗАРЕГИСТРИРОВАТЬСЯ
           </button>

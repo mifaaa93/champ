@@ -1046,7 +1046,7 @@ async def lookup_event_uid(session: AsyncSession, uid: int) -> dict:
 
 
 async def register_event_name(
-    session: AsyncSession, uid: int, nickname: str
+    session: AsyncSession, uid: int, nickname: str, telegram: str = ""
 ) -> dict:
     check = await lookup_event_uid(session, uid)
     if check["status"] == "not_in_base":
@@ -1055,6 +1055,7 @@ async def register_event_name(
         return check
 
     nick = nickname.strip()[:64]
+    tg = str(telegram or "").strip().lstrip("@")[:64]
     part = (
         await session.execute(select(Participant).where(Participant.uid == uid))
     ).scalar_one_or_none()
@@ -1066,11 +1067,14 @@ async def register_event_name(
         part = Participant(
             uid=uid,
             nickname=nick,
+            telegram=tg,
             country=(info or {}).get("country") if isinstance(info, dict) else None,
         )
         session.add(part)
     else:
         part.nickname = nick
+        if tg:
+            part.telegram = tg
     await session.commit()
 
     try:
