@@ -173,6 +173,7 @@ export function EventHome() {
   const [regName, setRegName] = useState("");
   const [regTg, setRegTg] = useState("");
   const [regErr, setRegErr] = useState("");
+  const [regLockName, setRegLockName] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [invite, setInvite] = useState<{ name: string; rank: number; dep: number } | null>(null);
   const [clock, setClock] = useState({ d: "00", h: "00", m: "00", s: "00" });
@@ -310,8 +311,9 @@ export function EventHome() {
         setModal("missing");
         return;
       }
-      if (st === "need_name") {
-        setRegName("");
+      if (st === "need_name" || st === "need_telegram") {
+        setRegName(st === "need_telegram" ? String((body as { name?: string }).name || "") : "");
+        setRegLockName(st === "need_telegram");
         setRegTg("");
         setRegErr("");
         setModal("name");
@@ -781,7 +783,11 @@ export function EventHome() {
       <div className={`modal-overlay${modal === "name" ? " active" : ""}`}>
         <div className="modal success">
           <h2>ДОБРО ПОЖАЛОВАТЬ!</h2>
-          <p>Ваш UID найден. Введите имя и Telegram: ссылка, @username или username.</p>
+          <p>
+            {regLockName
+              ? "Имя уже сохранено. Укажи Telegram: ссылка, @username или username."
+              : "Ваш UID найден. Введите имя и Telegram: ссылка, @username или username."}
+          </p>
           <input
             className="modal-input"
             value={regName}
@@ -790,7 +796,8 @@ export function EventHome() {
               if (e.key === "Enter") void registerName();
             }}
             placeholder="Ваше имя / Никнейм"
-            autoFocus
+            readOnly={regLockName}
+            autoFocus={!regLockName}
           />
           <input
             className="modal-input"
@@ -800,6 +807,7 @@ export function EventHome() {
               if (e.key === "Enter") void registerName();
             }}
             placeholder="https://t.me/username или @username"
+            autoFocus={regLockName}
           />
           {regErr ? <p className="err">{regErr}</p> : null}
           <button type="button" className="modal-btn" onClick={() => void registerName()} disabled={busy}>
