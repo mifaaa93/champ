@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AdminChrome } from "@/components/AdminChrome";
 import "../admin.css";
 
 export const metadata: Metadata = {
@@ -7,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <AdminChrome>{children}</AdminChrome>;
 }

@@ -164,6 +164,15 @@ export function EventHome() {
   }, []);
 
   useEffect(() => {
+    document.documentElement.classList.add("po-root");
+    document.body.classList.add("po-root");
+    return () => {
+      document.documentElement.classList.remove("po-root");
+      document.body.classList.remove("po-root");
+    };
+  }, []);
+
+  useEffect(() => {
     void load().catch(() => setData(null));
     const id = window.setInterval(() => void load().catch(() => {}), 30000);
     return () => window.clearInterval(id);

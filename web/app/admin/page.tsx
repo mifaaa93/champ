@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -24,6 +23,7 @@ type Settings = {
   loss_comp_cap: number;
   require_trade: boolean;
   prize_places: number;
+  prize_pool: number;
   tg_hourly_header: string;
   tg_yield_title: string;
   tg_yield_row: string;
@@ -37,6 +37,37 @@ type Settings = {
   tg_final_loss_row: string;
 };
 
+type BoardRow = {
+  place: number;
+  name: string;
+  dep: number;
+  turn: number;
+  pnl?: number;
+  return_pct?: number;
+  dummy?: boolean;
+  uid?: number;
+};
+
+type PublicEvent = {
+  name: string;
+  prize_pool: number;
+  stats_players: number;
+  stats_deposits?: number;
+  stats_turnover: number;
+  top: BoardRow[];
+};
+
+type Tab =
+  | "dashboard"
+  | "participants"
+  | "ranking"
+  | "top"
+  | "prizes"
+  | "params"
+  | "day"
+  | "telegram"
+  | "archive";
+
 const TOKEN_KEY = "ibcup_admin_token";
 
 const empty: Settings = {
@@ -49,6 +80,7 @@ const empty: Settings = {
   loss_comp_cap: 500,
   require_trade: false,
   prize_places: 3,
+  prize_pool: 5000,
   tg_hourly_header: "<b>Чемпионат</b> · {day} · {time} UTC+2",
   tg_yield_title: "<b>Доходность</b>",
   tg_yield_row: "{place}. <code>{uid}</code> {name}  {pct}  ({pnl})",
@@ -62,6 +94,18 @@ const empty: Settings = {
   tg_final_loss_row: "{place}. <code>{uid}</code>  {prize}",
 };
 
+const NAV: { id: Tab; icon: string; label: string; group: string }[] = [
+  { id: "dashboard", icon: "📊", label: "Дашборд", group: "Основное" },
+  { id: "participants", icon: "👥", label: "Участники", group: "Основное" },
+  { id: "ranking", icon: "🏆", label: "Рейтинг", group: "Основное" },
+  { id: "top", icon: "✏️", label: "Редактор Топ-10", group: "Основное" },
+  { id: "prizes", icon: "💰", label: "Призы ($)", group: "Настройки" },
+  { id: "params", icon: "⚙️", label: "Параметры", group: "Настройки" },
+  { id: "day", icon: "⏱️", label: "День", group: "Управление" },
+  { id: "telegram", icon: "📱", label: "Telegram", group: "Управление" },
+  { id: "archive", icon: "📁", label: "Архив", group: "Аналитика" },
+];
+
 function detailText(detail: unknown): string {
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail)) {
@@ -71,6 +115,10 @@ function detailText(detail: unknown): string {
       .join("; ");
   }
   return "Ошибка запроса";
+}
+
+function money(n: number) {
+  return `$${Math.round(n).toLocaleString("en-US")}`;
 }
 
 export default function AdminPage() {
@@ -84,7 +132,8 @@ export default function AdminPage() {
   const [tgCtx, setTgCtx] = useState<TgContext | null>(null);
   const [users, setUsers] = useState<ParticipantRow[]>([]);
   const [usersDay, setUsersDay] = useState("");
-  const [tab, setTab] = useState<"users" | "settings" | "event">("event");
+  const [tab, setTab] = useState<Tab>("dashboard");
+  const [event, setEvent] = useState<PublicEvent | null>(null);
 
   useEffect(() => {
     const saved = sessionStorage.getItem(TOKEN_KEY);
@@ -93,14 +142,13 @@ export default function AdminPage() {
       void load(saved);
     }
     if (typeof window !== "undefined") {
-      if (window.location.hash === "#settings") setTab("settings");
-      if (window.location.hash === "#event") setTab("event");
-      if (window.location.hash === "#users") setTab("users");
+      const hash = window.location.hash.replace("#", "") as Tab;
+      if (NAV.some((n) => n.id === hash)) setTab(hash);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function openTab(next: "users" | "settings" | "event") {
+  function openTab(next: Tab) {
     setTab(next);
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", `/admin#${next}`);
@@ -150,6 +198,16 @@ export default function AdminPage() {
     }
   }
 
+  async function loadEvent() {
+    try {
+      const res = await fetch(apiPath("/public/event"), { cache: "no-store" });
+      if (!res.ok) return;
+      setEvent((await res.json()) as PublicEvent);
+    } catch {
+      /* dashboard stays empty */
+    }
+  }
+
   async function load(tok = token) {
     setErr("");
     setBusy("load");
@@ -171,6 +229,7 @@ export default function AdminPage() {
       setUsers(plist.rows || []);
       setUsersDay(plist.day || "");
       await loadTg(tok, true);
+      await loadEvent();
       setStatus("Настройки загружены");
     } catch (e) {
       setAuthed(false);
@@ -265,9 +324,10 @@ export default function AdminPage() {
       };
       setStatus(
         `Снимки: ок ${data.snapshots?.ok ?? 0}, ошибок ${data.snapshots?.fail ?? 0}. ` +
-          `Statistics: ${data.stats?.stats_rows ?? 0} строк, участников ${data.stats?.participants ?? 0}.`
+          `Statistics: ${data.stats?.stats_rows ?? 0} строк, участников ${data.stats?.participants ?? 0}.`,
       );
       await loadTg(token, true);
+      await loadEvent();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "ошибка");
     } finally {
@@ -319,7 +379,7 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    if (!authed || tab !== "settings") return;
+    if (!authed || tab !== "telegram") return;
     const id = window.setInterval(() => void loadTg(token, false), 60000);
     return () => window.clearInterval(id);
   }, [authed, tab, token]);
@@ -328,416 +388,463 @@ export default function AdminPage() {
   const finalText = useMemo(() => (tgCtx ? buildFinal(tgCtx, form) : ""), [tgCtx, form]);
   const hourlyErrors = useMemo(
     () => (hourlyText ? validateTelegramHtml(hourlyText) : []),
-    [hourlyText]
+    [hourlyText],
   );
   const finalErrors = useMemo(
     () => (finalText ? validateTelegramHtml(finalText) : []),
-    [finalText]
+    [finalText],
   );
+
+  const avgReturn = useMemo(() => {
+    const rows = event?.top || [];
+    if (!rows.length) return 0;
+    const sum = rows.reduce((acc, r) => acc + Number(r.return_pct || 0), 0);
+    return sum / rows.length;
+  }, [event]);
+
+  const groups = ["Основное", "Настройки", "Управление", "Аналитика"];
 
   if (!authed) {
     return (
-      <main className="wrap">
-        <div className="kicker">OPS</div>
-        <h1>Админка</h1>
+      <div className="login-wrap">
         <form
-          className="form card"
+          className="login-card"
           onSubmit={(e) => {
             e.preventDefault();
             void load(token);
           }}
         >
-          <label>
-            Токен администратора
+          <div className="sidebar-logo">
+            PO ADMIN
+            <span>Full Control Panel</span>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Токен администратора</label>
             <input
+              className="form-input"
               type="password"
               value={token}
               onChange={(e) => setToken(e.target.value)}
               autoComplete="current-password"
             />
-          </label>
-          <button className="cta" type="submit" disabled={busy === "load" || !token}>
+          </div>
+          <button className="btn btn-primary" type="submit" disabled={busy === "load" || !token} style={{ width: "100%" }}>
             {busy === "load" ? "Входим…" : "Войти"}
           </button>
-          {err ? <p className="err">{err}</p> : null}
+          {err ? <p className="err-line">{err}</p> : null}
         </form>
-      </main>
+      </div>
+    );
+  }
+
+  function rankingTable(rows: BoardRow[], limit?: number) {
+    const list = limit ? rows.slice(0, limit) : rows;
+    return (
+      <div className="table-container">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Место</th>
+              <th>UID</th>
+              <th>Имя</th>
+              <th>Депозит</th>
+              <th>Оборот</th>
+              <th>Прибыль</th>
+              <th>Доходность</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="note-dim">
+                  Пока пусто
+                </td>
+              </tr>
+            ) : (
+              list.map((row) => (
+                <tr key={row.place}>
+                  <td className={`rank-cell${row.place <= 3 ? ` rank-${row.place}` : ""}`}>{row.place}</td>
+                  <td className="uid-cell">{row.dummy ? "HIDDEN" : row.uid || "—"}</td>
+                  <td className="name-cell">{row.name}</td>
+                  <td>{money(row.dep)}</td>
+                  <td>{money(row.turn)}</td>
+                  <td className={(row.pnl || 0) >= 0 ? "profit-cell" : "loss-cell"}>{money(row.pnl || 0)}</td>
+                  <td className={(row.return_pct || 0) >= 0 ? "profit-cell" : "loss-cell"}>
+                    {(row.return_pct || 0) >= 0 ? "+" : ""}
+                    {(row.return_pct || 0).toFixed(1)}%
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     );
   }
 
   return (
-    <div className="adm">
-      <aside className="adm-sidebar">
-        <div className="adm-logo">
+    <>
+      <aside className="sidebar">
+        <div className="sidebar-logo">
           PO ADMIN
           <span>Full Control Panel</span>
         </div>
-        <div className="adm-nav-title">Основное</div>
-        <button type="button" className={`adm-nav-item ${tab === "event" ? "on" : ""}`} onClick={() => openTab("event")}>
-          Редактор Топ-10
-        </button>
-        <button type="button" className={`adm-nav-item ${tab === "users" ? "on" : ""}`} onClick={() => openTab("users")}>
-          Участники
-        </button>
-        <div className="adm-nav-title">Настройки</div>
-        <button type="button" className={`adm-nav-item ${tab === "settings" ? "on" : ""}`} onClick={() => openTab("settings")}>
-          Telegram и день
-        </button>
-        <div className="adm-nav-title">Сессия</div>
-        <button
-          type="button"
-          className="adm-nav-item"
-          onClick={() => {
-            sessionStorage.removeItem(TOKEN_KEY);
-            setAuthed(false);
-          }}
-        >
-          Выйти
-        </button>
-      </aside>
-      <main className="adm-main">
-        <div className="adm-card-header" style={{ border: "none", paddingBottom: 0 }}>
-          <div>
-            <h1 className="adm-page-title">
-              {tab === "event" ? "Чемпионат" : tab === "users" ? "Участники" : "Telegram и день"}
-            </h1>
-            <div className="adm-page-sub">
-              {tab === "event"
-                ? "Рандомизация пустышек, призы и окно сезона"
-                : tab === "users"
-                  ? "UID с возможностью редактирования"
-                  : "Шаблоны постов, снимки и закрытие дня"}
-            </div>
+        {groups.map((group) => (
+          <div className="nav-section" key={group}>
+            <div className="nav-section-title">{group}</div>
+            {NAV.filter((n) => n.group === group).map((n) => (
+              <button
+                type="button"
+                key={n.id}
+                className={`nav-item ${tab === n.id ? "active" : ""}`}
+                onClick={() => openTab(n.id)}
+              >
+                <span className="icon">{n.icon}</span>
+                {n.label}
+                {n.id === "participants" ? <span className="badge">{users.length}</span> : null}
+              </button>
+            ))}
+          </div>
+        ))}
+        <div className="nav-section">
+          <div className="nav-section-title">Сессия</div>
+          <button
+            type="button"
+            className="nav-item"
+            onClick={() => {
+              sessionStorage.removeItem(TOKEN_KEY);
+              setAuthed(false);
+            }}
+          >
+            <span className="icon">🚪</span>
+            Выйти
+          </button>
+        </div>
+        <div className="sidebar-footer">
+          <div className="admin-status">
+            <span className="dot" />
+            <span>Полный контроль активен</span>
           </div>
         </div>
-        {status ? <p className="ok">{status}</p> : null}
-        {err ? <p className="err">{err}</p> : null}
-      {tab === "event" ? (
-        <EventPanel
-          adminFetch={adminFetch}
-          onStatus={setStatus}
-          onError={setErr}
-        />
-      ) : null}
-      {tab === "users" ? (
-        <UsersTable
-          users={users}
-          day={usersDay}
-          onDelete={async (uid) => {
-            setBusy("del");
-            setErr("");
-            try {
-              await adminFetch(`/admin/participants/${uid}`, "DELETE");
-              setUsers((prev) => prev.filter((u) => u.uid !== uid));
-              setStatus(`UID ${uid} удалён из чемпионата`);
-            } catch (e) {
-              setErr(e instanceof Error ? e.message : "ошибка");
-            } finally {
-              setBusy("");
-            }
-          }}
-        />
-      ) : null}
-      {tab === "settings" ? (
-      <form className="form wide card" onSubmit={save}>
-        <div className="form-grid">
-          <label>
-            <Hint text="Сколько человек попадает в часовой пост и на сайт: топ по доходности и отдельно топ по просадке, от 1 до 50.">
-              Участников в посте (1–50)
-            </Hint>
-            <input
-              type="number"
-              min={1}
-              max={50}
-              value={form.top_n}
-              onChange={(e) => patch("top_n", Number(e.target.value))}
+      </aside>
+      <main className="main">
+        <div className="toast-container">
+          {status ? <div className="toast success">{status}</div> : null}
+          {err ? <div className="toast error">{err}</div> : null}
+        </div>
+        <div className="mobile-nav">
+          {NAV.map((n) => (
+            <button
+              type="button"
+              key={n.id}
+              className={`btn btn-sm ${tab === n.id ? "btn-primary" : "btn-ghost"}`}
+              onClick={() => openTab(n.id)}
+            >
+              {n.label}
+            </button>
+          ))}
+        </div>
+
+        <section className={`section ${tab === "dashboard" ? "active" : ""}`}>
+          <div className="page-header">
+            <div>
+              <h1 className="page-title">Дашборд</h1>
+              <div className="page-subtitle">Живые цифры с публичного рейтинга</div>
+            </div>
+            <button className="btn btn-ghost" type="button" onClick={() => void loadEvent()}>
+              🔄 Обновить
+            </button>
+          </div>
+          <div className="stats-grid">
+            <button type="button" className="stat-card cyan" onClick={() => openTab("participants")}>
+              <div className="stat-label">Участников</div>
+              <div className="stat-value">{(event?.stats_players || 0).toLocaleString("en-US")}</div>
+            </button>
+            <button type="button" className="stat-card green" onClick={() => openTab("ranking")}>
+              <div className="stat-label">Общий депозит</div>
+              <div className="stat-value">{money(event?.stats_deposits || 0)}</div>
+            </button>
+            <button type="button" className="stat-card gold" onClick={() => openTab("prizes")}>
+              <div className="stat-label">Призовой пул</div>
+              <div className="stat-value">{money(event?.prize_pool || form.prize_pool || 0)}</div>
+            </button>
+            <button type="button" className="stat-card purple" onClick={() => openTab("ranking")}>
+              <div className="stat-label">Средняя доходность</div>
+              <div className="stat-value">
+                {avgReturn >= 0 ? "+" : ""}
+                {avgReturn.toFixed(1)}%
+              </div>
+            </button>
+          </div>
+          <div className="card">
+            <div className="card-header">
+              <div className="card-title">🔥 Топ-5 текущего рейтинга</div>
+              <span className="card-badge badge-live">● LIVE</span>
+            </div>
+            {rankingTable(event?.top || [], 5)}
+          </div>
+        </section>
+
+        <section className={`section ${tab === "participants" ? "active" : ""}`}>
+          <UsersTable
+            users={users}
+            day={usersDay}
+            onDelete={async (uid) => {
+              setBusy("del");
+              setErr("");
+              try {
+                await adminFetch(`/admin/participants/${uid}`, "DELETE");
+                setUsers((prev) => prev.filter((u) => u.uid !== uid));
+                setStatus(`UID ${uid} удалён из чемпионата`);
+              } catch (e) {
+                setErr(e instanceof Error ? e.message : "ошибка");
+              } finally {
+                setBusy("");
+              }
+            }}
+          />
+        </section>
+
+        <section className={`section ${tab === "ranking" ? "active" : ""}`}>
+          <div className="page-header">
+            <div>
+              <h1 className="page-title">Рейтинг Live</h1>
+              <div className="page-subtitle">Обновление с публичной витрины</div>
+            </div>
+            <button className="btn btn-ghost" type="button" onClick={() => void loadEvent()}>
+              🔄 Обновить
+            </button>
+          </div>
+          <div className="card">{rankingTable(event?.top || [])}</div>
+        </section>
+
+        <section className={`section ${tab === "top" || tab === "prizes" || tab === "params" ? "active" : ""}`}>
+          {tab === "top" || tab === "prizes" || tab === "params" ? (
+            <EventPanel
+              adminFetch={adminFetch}
+              onStatus={setStatus}
+              onError={setErr}
+              section={tab === "top" ? "top" : tab === "prizes" ? "prizes" : "params"}
             />
-            {errors.top_n ? <span className="field-err">{errors.top_n}</span> : null}
-          </label>
-          <label>
-            <Hint text="Порог входа в зачёт сегодняшнего дня. Регистрация на сайте разовая, но депозит должен быть не меньше этой суммы именно за текущие сутки UTC+2.">
-              Мин. депозит дня, $
-            </Hint>
-            <input
-              type="number"
-              min={1}
-              step={1}
-              value={form.min_day_deposit}
-              onChange={(e) => patch("min_day_deposit", Number(e.target.value))}
-            />
-            {errors.min_day_deposit ? (
-              <span className="field-err">{errors.min_day_deposit}</span>
-            ) : null}
-          </label>
-          <label>
-            <Hint text="В часовой пост по доходности попадают только те, у кого % не ниже этого порога. 0 — фильтр выключен, берём просто топ.">
-              Мин. доходность в посте, %
-            </Hint>
-            <input
-              type="number"
-              min={0}
-              step={0.1}
-              value={form.min_return_pct}
-              onChange={(e) => patch("min_return_pct", Number(e.target.value))}
-            />
-            {errors.min_return_pct ? <span className="field-err">{errors.min_return_pct}</span> : null}
-          </label>
-          <label>
-            <Hint text="Как часто бот сам шлёт живой рейтинг в группу. 60 = каждый час, 120 = каждые два часа. Итоги дня уходят отдельно после полуночи UTC+2.">
-              Пост в Telegram каждые, мин
-            </Hint>
-            <input
-              type="number"
-              min={15}
-              max={180}
-              value={form.publish_interval_minutes}
-              onChange={(e) => patch("publish_interval_minutes", Number(e.target.value))}
-            />
-            {errors.publish_interval_minutes ? (
-              <span className="field-err">{errors.publish_interval_minutes}</span>
-            ) : null}
-          </label>
-          <label>
-            <Hint text="Сколько призовых мест в каждой номинации при закрытии дня. Не путать с «участников в посте» — это только призы.">
-              Призовых мест
-            </Hint>
-            <input
-              type="number"
-              min={1}
-              max={10}
-              value={form.prize_places}
-              onChange={(e) => patch("prize_places", Number(e.target.value))}
-            />
-            {errors.prize_places ? <span className="field-err">{errors.prize_places}</span> : null}
-          </label>
-          <label>
-            <Hint text="Максимум выплаты за просадку на одно место. Если 15% от убытка больше капа — платим кап, не больше.">
-              Кап компенсации просадки, $
-            </Hint>
-            <input
-              type="number"
-              min={0}
-              value={form.loss_comp_cap}
-              onChange={(e) => patch("loss_comp_cap", Number(e.target.value))}
-            />
-            {errors.loss_comp_cap ? <span className="field-err">{errors.loss_comp_cap}</span> : null}
-          </label>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={form.require_trade}
-              onChange={(e) => patch("require_trade", e.target.checked)}
-            />
-            <Hint text="Если включено, в зачёт не попадёт тот, кто только задепозитил и не сделал ни одной сделки за сутки.">
+          ) : null}
+        </section>
+
+        <section className={`section ${tab === "day" ? "active" : ""}`}>
+          <div className="page-header">
+            <div>
+              <h1 className="page-title">Управление днём</h1>
+              <div className="page-subtitle">Снимки, закрытие суток, посты</div>
+            </div>
+          </div>
+          <div className="card">
+            <div className="day-actions">
+              <button className="btn btn-primary" type="button" onClick={() => void snapshot()} disabled={Boolean(busy)}>
+                {busy === "snap" ? "Снимаем…" : "📸 Snapshot"}
+              </button>
+              <button className="btn btn-primary" type="button" onClick={() => void loadEvent()} disabled={Boolean(busy)}>
+                🔄 Обновить рейтинг
+              </button>
+              <button className="btn btn-success" type="button" onClick={() => void sendPost("hourly")} disabled={Boolean(busy)}>
+                {busy === "sendH" ? "Шлём…" : "📤 Telegram"}
+              </button>
+              <button className="btn btn-danger" type="button" onClick={() => void freeze()} disabled={Boolean(busy)}>
+                {busy === "freeze" ? "Фиксируем…" : "🔒 Закрыть день"}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className={`section ${tab === "telegram" ? "active" : ""}`}>
+          <div className="page-header">
+            <div>
+              <h1 className="page-title">Telegram бот</h1>
+              <div className="page-subtitle">Шаблоны постов. Токен бота лежит в окружении сервера.</div>
+            </div>
+          </div>
+          <form className="card" onSubmit={save}>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">
+                  <Hint text="Сколько человек попадает в часовой пост: топ по доходности и отдельно топ по просадке.">
+                    Участников в посте (1–50)
+                  </Hint>
+                </label>
+                <input
+                  className="form-input"
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={form.top_n}
+                  onChange={(e) => patch("top_n", Number(e.target.value))}
+                />
+                {errors.top_n ? <span className="field-err">{errors.top_n}</span> : null}
+              </div>
+              <div className="form-group">
+                <label className="form-label">Пост каждые, мин</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  min={15}
+                  max={180}
+                  value={form.publish_interval_minutes}
+                  onChange={(e) => patch("publish_interval_minutes", Number(e.target.value))}
+                />
+                {errors.publish_interval_minutes ? (
+                  <span className="field-err">{errors.publish_interval_minutes}</span>
+                ) : null}
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Мин. депозит дня, $</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  min={1}
+                  value={form.min_day_deposit}
+                  onChange={(e) => patch("min_day_deposit", Number(e.target.value))}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Мин. доходность в посте, %</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  value={form.min_return_pct}
+                  onChange={(e) => patch("min_return_pct", Number(e.target.value))}
+                />
+              </div>
+            </div>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={form.require_trade}
+                onChange={(e) => patch("require_trade", e.target.checked)}
+              />
               Нужна хотя бы одна сделка за день
-            </Hint>
-          </label>
-        </div>
-
-        <h3>
-          <Hint text="Фиксированные суммы приза за номинацию «доходность». 1 место — максимальный %, затем 2, 3 и дальше.">
-            Призы доходности, $
-          </Hint>
-        </h3>
-        <div className="form-grid">
-          {places.map((i) => (
-            <label key={`y${i}`}>
-              <Hint text={`Сколько долларов получает ${i + 1} место в номинации доходность при закрытии дня.`}>
-                {i + 1} место
-              </Hint>
-              <input
-                type="number"
-                min={0}
-                value={form.prize_yield[i] ?? 0}
-                onChange={(e) => {
-                  const copy = [...form.prize_yield];
-                  copy[i] = Number(e.target.value);
-                  patch("prize_yield", copy);
-                }}
-              />
-              {errors[`y${i}`] ? <span className="field-err">{errors[`y${i}`]}</span> : null}
             </label>
-          ))}
-        </div>
-
-        <h3>
-          <Hint text="Процент от торгового убытка, который компенсируем в номинации «просадка». Считается от PnL, потом режется капом. Кто уже в призах доходности — сюда не берётся.">
-            Компенсация просадки, %
-          </Hint>
-        </h3>
-        <div className="form-grid">
-          {places.map((i) => (
-            <label key={`p${i}`}>
-              <Hint text={`Какой процент убытка компенсируем ${i + 1} месту в номинации просадка.`}>
-                {i + 1} место
-              </Hint>
-              <input
-                type="number"
-                min={0}
-                max={100}
-                step={0.1}
-                value={form.prize_loss_pct[i] ?? 0}
-                onChange={(e) => {
-                  const copy = [...form.prize_loss_pct];
-                  copy[i] = Number(e.target.value);
-                  patch("prize_loss_pct", copy);
-                }}
+            <div className="form-group">
+              <label className="form-label">Шапка часового поста</label>
+              <textarea
+                className="form-input"
+                rows={2}
+                value={form.tg_hourly_header}
+                onChange={(e) => patch("tg_hourly_header", e.target.value)}
               />
-              {errors[`p${i}`] ? <span className="field-err">{errors[`p${i}`]}</span> : null}
-            </label>
-          ))}
-        </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Заголовок доходности</label>
+                <input className="form-input" value={form.tg_yield_title} onChange={(e) => patch("tg_yield_title", e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Заголовок просадки</label>
+                <input className="form-input" value={form.tg_loss_title} onChange={(e) => patch("tg_loss_title", e.target.value)} />
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Строка доходности</label>
+              <input className="form-input" value={form.tg_yield_row} onChange={(e) => patch("tg_yield_row", e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Строка просадки</label>
+              <input className="form-input" value={form.tg_loss_row} onChange={(e) => patch("tg_loss_row", e.target.value)} />
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Пустая доходность</label>
+                <input className="form-input" value={form.tg_yield_empty} onChange={(e) => patch("tg_yield_empty", e.target.value)} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Пустая просадка</label>
+                <input className="form-input" value={form.tg_loss_empty} onChange={(e) => patch("tg_loss_empty", e.target.value)} />
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Подвал</label>
+              <textarea className="form-input" rows={2} value={form.tg_footer} onChange={(e) => patch("tg_footer", e.target.value)} />
+            </div>
+            <div className="preview-box">
+              {hourlyErrors.length ? (
+                <p className="err-line">{hourlyErrors.join("; ")}</p>
+              ) : hourlyText ? (
+                <p className="ok-line">Часовой пост: HTML корректный</p>
+              ) : (
+                <p className="note-dim">Ждём данные рейтинга…</p>
+              )}
+              <div className="preview tg-preview" dangerouslySetInnerHTML={{ __html: toPreviewHtml(hourlyText) }} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Шапка итогов дня</label>
+              <input className="form-input" value={form.tg_final_header} onChange={(e) => patch("tg_final_header", e.target.value)} />
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label className="form-label">Итог, строка доходности</label>
+                <input
+                  className="form-input"
+                  value={form.tg_final_yield_row}
+                  onChange={(e) => patch("tg_final_yield_row", e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Итог, строка просадки</label>
+                <input
+                  className="form-input"
+                  value={form.tg_final_loss_row}
+                  onChange={(e) => patch("tg_final_loss_row", e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="preview-box">
+              <p className="note-dim">
+                {tgCtx?.final_source === "frozen"
+                  ? "Зафиксированный итог закрытого дня."
+                  : "Черновик: день ещё не закрыт, места посчитаны по текущему рейтингу."}
+              </p>
+              {finalErrors.length ? (
+                <p className="err-line">{finalErrors.join("; ")}</p>
+              ) : finalText ? (
+                <p className="ok-line">Итоги дня: HTML корректный</p>
+              ) : (
+                <p className="note-dim">Ждём данные рейтинга…</p>
+              )}
+              <div className="preview tg-preview" dangerouslySetInnerHTML={{ __html: toPreviewHtml(finalText) }} />
+            </div>
+            <p className="note-dim">Отправка в группу берёт уже сохранённые шаблоны. Сначала сохрани, если правил текст.</p>
+            <div className="header-actions">
+              <button className="btn btn-success" type="submit" disabled={Boolean(busy)}>
+                {busy === "save" ? "Сохраняем…" : "💾 Сохранить"}
+              </button>
+              <button className="btn btn-primary" type="button" disabled={Boolean(busy)} onClick={() => void sendPost("hourly")}>
+                {busy === "sendH" ? "Шлём…" : "Отправить часовой"}
+              </button>
+              <button className="btn btn-ghost" type="button" disabled={Boolean(busy)} onClick={() => void sendPost("final")}>
+                {busy === "sendF" ? "Шлём…" : "Отправить итоги"}
+              </button>
+            </div>
+          </form>
+        </section>
 
-        <h3>
-          <Hint text="Живой рейтинг, который бот шлёт в группу по интервалу. Не итог дня.">
-            Часовой пост
-          </Hint>
-        </h3>
-        <p className="note">
-          Плейсхолдеры: {"{day}"} {"{time}"} {"{site}"} {"{place}"} {"{uid}"} {"{name}"} {"{pct}"}{" "}
-          {"{pnl}"}. HTML: b, i, u, s, code, pre, a. Превью обновляется сразу при правке шаблона.
-        </p>
-        <label>
-          <Hint text="Первая строка часового сообщения. {day} — дата UTC+2, {time} — время снимка.">
-            Шапка часового поста
-          </Hint>
-          <textarea rows={2} value={form.tg_hourly_header} onChange={(e) => patch("tg_hourly_header", e.target.value)} />
-        </label>
-        <div className="form-grid">
-          <label>
-            <Hint text="Заголовок блока с лидерами по %. Используется и в часовом посте, и в итогах.">
-              Заголовок доходности
-            </Hint>
-            <input value={form.tg_yield_title} onChange={(e) => patch("tg_yield_title", e.target.value)} />
-          </label>
-          <label>
-            <Hint text="Заголовок блока с максимальной просадкой. И в часовом посте, и в итогах.">
-              Заголовок просадки
-            </Hint>
-            <input value={form.tg_loss_title} onChange={(e) => patch("tg_loss_title", e.target.value)} />
-          </label>
-        </div>
-        <label>
-          <Hint text="Одна строка списка доходности. {place} место, {uid}, {name}, {pct}, {pnl}.">
-            Строка доходности
-          </Hint>
-          <input value={form.tg_yield_row} onChange={(e) => patch("tg_yield_row", e.target.value)} />
-        </label>
-        <label>
-          <Hint text="Одна строка списка просадки в часовом посте. Те же плейсхолдеры: place, uid, name, pct, pnl.">
-            Строка просадки
-          </Hint>
-          <input value={form.tg_loss_row} onChange={(e) => patch("tg_loss_row", e.target.value)} />
-        </label>
-        <div className="form-grid">
-          <label>
-            <Hint text="Текст, если за день никто не попал в топ доходности.">
-              Пустая доходность
-            </Hint>
-            <input value={form.tg_yield_empty} onChange={(e) => patch("tg_yield_empty", e.target.value)} />
-          </label>
-          <label>
-            <Hint text="Текст, если никто не в минусе — блока просадки не из кого собрать.">
-              Пустая просадка
-            </Hint>
-            <input value={form.tg_loss_empty} onChange={(e) => patch("tg_loss_empty", e.target.value)} />
-          </label>
-        </div>
-        <label>
-          <Hint text="Последние строки любого поста. {site} — ссылка на сайт или архив дня.">
-            Подвал
-          </Hint>
-          <textarea rows={2} value={form.tg_footer} onChange={(e) => patch("tg_footer", e.target.value)} />
-        </label>
-        <div className="preview-box">
-          {hourlyErrors.length ? (
-            <ul className="err">
-              {hourlyErrors.map((e) => (
-                <li key={e}>{e}</li>
-              ))}
-            </ul>
-          ) : hourlyText ? (
-            <p className="ok">Часовой пост: HTML корректный</p>
-          ) : (
-            <p className="note">Ждём данные рейтинга…</p>
-          )}
-          <div
-            className="preview tg-preview"
-            dangerouslySetInnerHTML={{ __html: toPreviewHtml(hourlyText) }}
-          />
-        </div>
-
-        <h3>
-          <Hint text="Сообщение после 00:00 UTC+2, когда день уже закрыт. Призы и места, не живой топ.">
-            Пост итогов дня
-          </Hint>
-        </h3>
-        <label>
-          <Hint text="Первая строка финального поста. {day} — закрытая дата.">
-            Шапка итогов дня
-          </Hint>
-          <input value={form.tg_final_header} onChange={(e) => patch("tg_final_header", e.target.value)} />
-        </label>
-        <div className="form-grid">
-          <label>
-            <Hint text="Строка призового места по доходности. {prize} — сумма в долларах, {uid}, {place}.">
-              Итог, строка доходности
-            </Hint>
-            <input value={form.tg_final_yield_row} onChange={(e) => patch("tg_final_yield_row", e.target.value)} />
-          </label>
-          <label>
-            <Hint text="Строка компенсации просадки. {prize} — сумма выплаты, не процент.">
-              Итог, строка просадки
-            </Hint>
-            <input value={form.tg_final_loss_row} onChange={(e) => patch("tg_final_loss_row", e.target.value)} />
-          </label>
-        </div>
-        <div className="preview-box">
-          <p className="note">
-            {tgCtx?.final_source === "frozen"
-              ? "Зафиксированный итог закрытого дня."
-              : "Черновик: день ещё не закрыт, места посчитаны по текущему рейтингу."}
-          </p>
-          {finalErrors.length ? (
-            <ul className="err">
-              {finalErrors.map((e) => (
-                <li key={e}>{e}</li>
-              ))}
-            </ul>
-          ) : finalText ? (
-            <p className="ok">Итоги дня: HTML корректный</p>
-          ) : (
-            <p className="note">Ждём данные рейтинга…</p>
-          )}
-          <div
-            className="preview tg-preview"
-            dangerouslySetInnerHTML={{ __html: toPreviewHtml(finalText) }}
-          />
-        </div>
-
-        <p className="note">Отправка в группу берёт уже сохранённые шаблоны. Сначала сохрани, если правил текст.</p>
-        <div className="actions">
-          <button className="cta" type="submit" disabled={Boolean(busy)}>
-            {busy === "save" ? "Сохраняем…" : "Сохранить"}
-          </button>
-          <button className="cta ghost" type="button" onClick={() => void snapshot()} disabled={Boolean(busy)}>
-            {busy === "snap" ? "Снимаем…" : "Снять снимки сейчас"}
-          </button>
-          <button className="cta ghost" type="button" onClick={() => void freeze()} disabled={Boolean(busy)}>
-            {busy === "freeze" ? "Фиксируем…" : "Закрыть день"}
-          </button>
-          <button className="cta ghost" type="button" disabled={Boolean(busy)} onClick={() => void sendPost("hourly")}>
-            {busy === "sendH" ? "Шлём…" : "Отправить часовой"}
-          </button>
-          <button className="cta ghost" type="button" disabled={Boolean(busy)} onClick={() => void sendPost("final")}>
-            {busy === "sendF" ? "Шлём…" : "Отправить итоги"}
-          </button>
-        </div>
-        {status ? <p className="ok">{status}</p> : null}
-        {err ? <p className="err">{err}</p> : null}
-      </form>
-      ) : null}
+        <section className={`section ${tab === "archive" ? "active" : ""}`}>
+          <div className="page-header">
+            <div>
+              <h1 className="page-title">Архив</h1>
+              <div className="page-subtitle">Закрытые дни чемпионата</div>
+            </div>
+          </div>
+          <div className="card" style={{ textAlign: "center", padding: 40 }}>
+            <p className="note-dim" style={{ marginBottom: 16 }}>
+              Архив дней открывается на отдельной странице.
+            </p>
+            <a className="btn btn-primary" href="/archive">
+              Открыть архив
+            </a>
+          </div>
+        </section>
       </main>
-    </div>
+    </>
   );
 }

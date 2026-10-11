@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Hint } from "@/components/Hint";
 
 export type ParticipantRow = {
   uid: number;
@@ -119,28 +118,25 @@ export function UsersTable({
   }
 
   return (
-    <section id="users" className="card" style={{ marginBottom: 18 }}>
-      <h3>
-        <Hint text="Все, кто один раз зарегистрировался на сайте. В зачёт сегодняшнего дня попадают только с депозитом за эти сутки UTC+2.">
-          Зарегистрированные · {filtered.length}/{users.length} · {day || "—"}
-        </Hint>
-      </h3>
-      <div className="form-grid" style={{ marginBottom: 12 }}>
-        <label>
-          <Hint text="Ищет сразу по UID, нику, telegram и стране.">Поиск</Hint>
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Участники</h1>
+          <div className="page-subtitle">
+            Все UID с возможностью редактирования · {filtered.length}/{users.length} · {day || "—"}
+          </div>
+        </div>
+      </div>
+      <div className="card">
+        <div className="search-bar">
           <input
             value={q}
             onChange={(e) => {
               setQ(e.target.value);
               setPage(1);
             }}
-            placeholder="UID, ник, telegram, страна"
+            placeholder="🔍 Поиск по UID или имени..."
           />
-        </label>
-        <label>
-          <Hint text="«В зачёте» — сегодня выполнены условия дня (депозит, статус). Остальные зарегистрированы, но в рейтинг дня не входят.">
-            Зачёт сегодня
-          </Hint>
           <select
             value={scope}
             onChange={(e) => {
@@ -148,123 +144,126 @@ export function UsersTable({
               setPage(1);
             }}
           >
-            <option value="all">все</option>
-            <option value="in">в зачёте</option>
-            <option value="out">не в зачёте</option>
+            <option value="all">Все статусы</option>
+            <option value="in">В зачёте</option>
+            <option value="out">Не в зачёте</option>
           </select>
-        </label>
-      </div>
-      <div style={{ overflowX: "auto" }}>
-        <table className="table">
-          <thead>
-            <tr>
-              {(
-                [
-                  ["uid", "UID"],
-                  ["nickname", "Ник"],
-                  ["telegram", "Telegram"],
-                  ["country", "Страна"],
-                  ["created_at", "Регистрация"],
-                  ["last_checked_at", "Последняя проверка"],
-                  ["deposits", "Депозит дня"],
-                  ["balance", "Баланс"],
-                  ["pnl", "PnL"],
-                  ["return_pct", "%"],
-                  ["eligible", "Зачёт"],
-                ] as [SortKey, string][]
-              ).map(([key, label]) => (
-                <th key={key}>
-                  <button type="button" className="th-sort" onClick={() => toggleSort(key)}>
-                    {label}
-                    {mark(key)}
-                  </button>
-                </th>
-              ))}
-              {onDelete ? <th></th> : null}
-            </tr>
-          </thead>
-          <tbody>
-            {slice.length === 0 ? (
+        </div>
+        <div className="table-container">
+          <table className="data-table">
+            <thead>
               <tr>
-                <td colSpan={onDelete ? 12 : 11} className="note">
-                  Никого не найдено.
-                </td>
+                {(
+                  [
+                    ["uid", "UID"],
+                    ["nickname", "Имя"],
+                    ["telegram", "Telegram"],
+                    ["country", "Страна"],
+                    ["created_at", "Регистрация"],
+                    ["deposits", "Депозит"],
+                    ["balance", "Баланс"],
+                    ["pnl", "Прибыль"],
+                    ["return_pct", "Доходность"],
+                    ["eligible", "Статус"],
+                  ] as [SortKey, string][]
+                ).map(([key, label]) => (
+                  <th key={key}>
+                    <button type="button" className="th-sort" onClick={() => toggleSort(key)}>
+                      {label}
+                      {mark(key)}
+                    </button>
+                  </th>
+                ))}
+                {onDelete ? <th>Действия</th> : null}
               </tr>
-            ) : (
-              slice.map((u) => (
-                <tr key={u.uid}>
-                  <td className="mono">
-                    <a href={`/trader/${u.uid}?from=admin`}>{u.uid}</a>
+            </thead>
+            <tbody>
+              {slice.length === 0 ? (
+                <tr>
+                  <td colSpan={onDelete ? 11 : 10} className="note-dim">
+                    Никого не найдено.
                   </td>
-                  <td>{u.nickname || "—"}</td>
-                  <td className="mono">{u.telegram ? `@${u.telegram}` : "—"}</td>
-                  <td>{u.country || "—"}</td>
-                  <td className="mono">{dubaiWhen(u.created_at)}</td>
-                  <td className="mono">{dubaiWhen(u.last_checked_at)}</td>
-                  <td className="mono">{u.deposits === null ? "—" : `$${u.deposits.toFixed(2)}`}</td>
-                  <td className="mono">{u.balance === null ? "—" : `$${u.balance.toFixed(2)}`}</td>
-                  <td className={`mono ${u.pnl !== null && u.pnl < 0 ? "down" : "up"}`}>{money(u.pnl)}</td>
-                  <td className={`mono ${u.return_pct !== null && u.return_pct < 0 ? "down" : "up"}`}>
-                    {pct(u.return_pct)}
-                  </td>
-                  <td>{u.eligible ? "да" : u.dq_reason || "нет"}</td>
-                  {onDelete ? (
-                    <td>
-                      <button
-                        type="button"
-                        className="cta ghost"
-                        onClick={() => {
-                          const who = u.nickname ? `${u.uid} (${u.nickname})` : String(u.uid);
-                          if (!window.confirm(`Удалить ${who} из чемпионата?\nОн пропадёт из рейтинга. Снимки и архив дней останутся.`)) {
-                            return;
-                          }
-                          const typed = window.prompt(`Введи UID ${u.uid}, чтобы подтвердить удаление:`);
-                          if (typed !== String(u.uid)) return;
-                          void onDelete(u.uid);
-                        }}
-                      >
-                        Удалить
-                      </button>
-                    </td>
-                  ) : null}
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                slice.map((u) => (
+                  <tr key={u.uid}>
+                    <td className="uid-cell">
+                      <a href={`/trader/${u.uid}?from=admin`}>{u.uid}</a>
+                    </td>
+                    <td className="name-cell">{u.nickname || "—"}</td>
+                    <td>{u.telegram ? `@${u.telegram}` : "—"}</td>
+                    <td>{u.country || "—"}</td>
+                    <td>{dubaiWhen(u.created_at)}</td>
+                    <td>{u.deposits === null ? "—" : `$${u.deposits.toFixed(2)}`}</td>
+                    <td>{u.balance === null ? "—" : `$${u.balance.toFixed(2)}`}</td>
+                    <td className={u.pnl !== null && u.pnl < 0 ? "loss-cell" : "profit-cell"}>{money(u.pnl)}</td>
+                    <td className={u.return_pct !== null && u.return_pct < 0 ? "loss-cell" : "profit-cell"}>
+                      {pct(u.return_pct)}
+                    </td>
+                    <td>
+                      {u.eligible ? (
+                        <span className="status-badge status-active">активен</span>
+                      ) : (
+                        <span className="status-badge status-withdraw">{u.dq_reason || "нет"}</span>
+                      )}
+                    </td>
+                    {onDelete ? (
+                      <td>
+                        <button
+                          type="button"
+                          className="btn btn-danger btn-sm"
+                          onClick={() => {
+                            const who = u.nickname ? `${u.uid} (${u.nickname})` : String(u.uid);
+                            if (
+                              !window.confirm(
+                                `Удалить ${who} из чемпионата?\nОн пропадёт из рейтинга. Снимки и архив дней останутся.`,
+                              )
+                            ) {
+                              return;
+                            }
+                            const typed = window.prompt(`Введи UID ${u.uid}, чтобы подтвердить удаление:`);
+                            if (typed !== String(u.uid)) return;
+                            void onDelete(u.uid);
+                          }}
+                        >
+                          Удалить
+                        </button>
+                      </td>
+                    ) : null}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="pager">
+          <button type="button" className="btn btn-ghost btn-sm" disabled={safePage <= 1} onClick={() => setPage(1)}>
+            «
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            disabled={safePage <= 1}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+          >
+            Назад
+          </button>
+          <span className="note-dim">
+            {safePage} / {pages} · по {PAGE_SIZE}
+          </span>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            disabled={safePage >= pages}
+            onClick={() => setPage((p) => Math.min(pages, p + 1))}
+          >
+            Вперёд
+          </button>
+          <button type="button" className="btn btn-ghost btn-sm" disabled={safePage >= pages} onClick={() => setPage(pages)}>
+            »
+          </button>
+        </div>
       </div>
-      <div className="pager">
-        <button type="button" className="cta ghost" disabled={safePage <= 1} onClick={() => setPage(1)}>
-          «
-        </button>
-        <button
-          type="button"
-          className="cta ghost"
-          disabled={safePage <= 1}
-          onClick={() => setPage((p) => Math.max(1, p - 1))}
-        >
-          Назад
-        </button>
-        <span className="note">
-          {safePage} / {pages} · по {PAGE_SIZE}
-        </span>
-        <button
-          type="button"
-          className="cta ghost"
-          disabled={safePage >= pages}
-          onClick={() => setPage((p) => Math.min(pages, p + 1))}
-        >
-          Вперёд
-        </button>
-        <button
-          type="button"
-          className="cta ghost"
-          disabled={safePage >= pages}
-          onClick={() => setPage(pages)}
-        >
-          »
-        </button>
-      </div>
-    </section>
+    </>
   );
 }

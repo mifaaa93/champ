@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type PrizeRow = { place: string; amount: number; suffix?: string };
 type ShowcaseRow = {
@@ -26,7 +26,13 @@ type EventForm = {
   telegram_channel_url: string;
   rami_url: string;
   event_rules: string;
+  prize_yield: number[];
+  prize_loss_pct: number[];
+  loss_comp_cap: number;
+  prize_places: number;
 };
+
+export type EventSection = "top" | "prizes" | "params";
 
 function toLocalInput(iso: string) {
   const d = new Date(iso);
@@ -53,19 +59,38 @@ function emptyRow(place: number): ShowcaseRow {
   };
 }
 
+function placeClass(i: number) {
+  if (i === 0) return "gold";
+  if (i === 1) return "silver";
+  if (i === 2) return "bronze";
+  return "default";
+}
+
+function intervalLabel(minutes: number) {
+  const m = Number(minutes) || 1;
+  const seconds = Math.round(m * 60);
+  if (m < 1) return `${seconds} секунд`;
+  if (m === 1) return "1 минута";
+  if (m < 5) return `${m} минуты`;
+  return `${m} минут`;
+}
+
 export function EventPanel({
   adminFetch,
   onStatus,
   onError,
+  section,
 }: {
   adminFetch: (path: string, method?: string, body?: unknown) => Promise<unknown>;
   onStatus: (s: string) => void;
   onError: (s: string) => void;
+  section: EventSection;
 }) {
   const [form, setForm] = useState<EventForm | null>(null);
   const [top, setTop] = useState<ShowcaseRow[]>([]);
   const [edit, setEdit] = useState<ShowcaseRow | null>(null);
   const [busy, setBusy] = useState("");
+  const [addUid, setAddUid] = useState("");
 
   useEffect(() => {
     let dead = false;
@@ -74,6 +99,9 @@ export function EventPanel({
         const s = (await adminFetch("/admin/settings")) as Record<string, unknown>;
         const sc = (await adminFetch("/admin/showcase")) as { rows: ShowcaseRow[] };
         if (dead) return;
+        const prize_places = Number(s.prize_places || 3);
+        const prize_yield = ((s.prize_yield as number[]) || []).slice();
+        const prize_loss_pct = ((s.prize_loss_pct as number[]) || []).slice();
         setForm({
           event_name: String(s.event_name || "PO CHAMPIONSHIP"),
           event_start: String(s.event_start || ""),
@@ -85,6 +113,10 @@ export function EventPanel({
           telegram_channel_url: String(s.telegram_channel_url || ""),
           rami_url: String(s.rami_url || ""),
           event_rules: ((s.event_rules as string[]) || []).join("\n"),
+          prize_places,
+          prize_yield,
+          prize_loss_pct,
+          loss_comp_cap: Number(s.loss_comp_cap || 0),
         });
         setTop(
           (sc.rows || []).map((r) => ({
@@ -103,10 +135,15 @@ export function EventPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!form) return <p className="note">Загрузка ивента…</p>;
+  const prizeSum = useMemo(
+    () => (form?.prize_table || []).reduce((acc, p) => acc + Number(p.amount || 0), 0),
+    [form],
+  );
+  const remaining = (form?.prize_pool || 0) - prizeSum;
 
-  async function saveSettings(e: React.FormEvent) {
-    e.preventDefault();
+  if (!form) return <p className="note-dim">Загрузка ивента…</p>;
+
+  async function saveSettings() {
     if (!form) return;
     setBusy("set");
     onError("");
@@ -137,6 +174,10 @@ export function EventPanel({
           .split("\n")
           .map((x) => x.trim())
           .filter(Boolean),
+        prize_places: Number(form.prize_places),
+        prize_yield: form.prize_yield.map((n) => Number(n)),
+        prize_loss_pct: form.prize_loss_pct.map((n) => Number(n)),
+        loss_comp_cap: Number(form.loss_comp_cap),
       });
       onStatus("Параметры чемпионата сохранены");
     } catch (err) {
@@ -175,304 +216,423 @@ export function EventPanel({
     setTop((prev) => prev.map((r) => (r.place === place ? { ...r, ...patch } : r)));
   }
 
+  function patchPrize(i: number, patch: Partial<PrizeRow>) {
+    const prize_table = form.prize_table.slice();
+    prize_table[i] = { ...prize_table[i], ...patch };
+    setForm({ ...form, prize_table });
+  }
+
   const intervalSec = Math.round((Number(form.dummy_tick_minutes) || 1) * 60);
 
-  return (
-    <>
-      <form className="adm-card" onSubmit={(e) => void saveSettings(e)}>
-        <div className="adm-card-header">
-          <div className="adm-card-title">Параметры чемпионата</div>
-          <span className="adm-badge">UTC+2</span>
-        </div>
-        <div className="adm-form-row">
-          <label className="adm-field">
-            Название
-            <input
-              className="adm-input"
-              value={form.event_name}
-              onChange={(e) => setForm({ ...form, event_name: e.target.value })}
-            />
-          </label>
-          <label className="adm-field">
-            Мин. деп сезона, $
-            <input
-              className="adm-input"
-              type="number"
-              min={50}
-              value={form.event_min_deposit}
-              onChange={(e) => setForm({ ...form, event_min_deposit: Number(e.target.value) })}
-            />
-            <span className="adm-hint">Строго от $50. Ниже — вне рейтинга.</span>
-          </label>
-        </div>
-        <div className="adm-form-row">
-          <label className="adm-field">
-            Начало таймера
-            <input
-              className="adm-input"
-              type="datetime-local"
-              value={toLocalInput(form.event_start)}
-              onChange={(e) => setForm({ ...form, event_start: e.target.value })}
-            />
-          </label>
-          <label className="adm-field">
-            Конец чемпионата
-            <input
-              className="adm-input"
-              type="datetime-local"
-              value={toLocalInput(form.event_end)}
-              onChange={(e) => setForm({ ...form, event_end: e.target.value })}
-            />
-          </label>
-        </div>
-        <div className="adm-form-row">
-          <label className="adm-field">
-            Telegram-канал
-            <input
-              className="adm-input"
-              value={form.telegram_channel_url}
-              onChange={(e) => setForm({ ...form, telegram_channel_url: e.target.value })}
-            />
-          </label>
-          <label className="adm-field">
-            Ссылка Rami
-            <input
-              className="adm-input"
-              value={form.rami_url}
-              onChange={(e) => setForm({ ...form, rami_url: e.target.value })}
-            />
-          </label>
-        </div>
-
-        <div className="adm-rand">
-          <h3>Рандомизация Топ-10</h3>
-          <label className="adm-field">
-            Интервал (минуты)
-            <input
-              className="adm-input"
-              type="number"
-              min={0.5}
-              step={0.5}
-              value={form.dummy_tick_minutes}
-              onChange={(e) => setForm({ ...form, dummy_tick_minutes: Number(e.target.value) })}
-            />
-          </label>
-          <div className="adm-interval">
-            <div className="adm-interval-label">Текущий интервал</div>
-            <div className="adm-interval-value">{form.dummy_tick_minutes} мин</div>
-            <div className="adm-interval-sec">{intervalSec} секунд</div>
-          </div>
-          <div className="adm-presets">
-            {[0.5, 1, 5, 10, 30].map((m) => (
-              <button
-                key={m}
-                type="button"
-                className="adm-btn ghost sm"
-                onClick={() => setForm({ ...form, dummy_tick_minutes: m })}
-              >
-                {m < 1 ? "30 сек" : `${m} мин`}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="adm-card-header" style={{ marginTop: 24 }}>
-          <div className="adm-card-title">Призовой фонд</div>
-        </div>
-        <label className="adm-field">
-          Общий пул, $
-          <input
-            className="adm-input"
-            type="number"
-            value={form.prize_pool}
-            onChange={(e) => setForm({ ...form, prize_pool: Number(e.target.value) })}
-          />
-        </label>
-        <div className="adm-prize-grid">
-          {form.prize_table.map((p, i) => (
-            <div className="adm-prize-card" key={i}>
-              <input
-                className="adm-input"
-                value={p.place}
-                onChange={(e) => {
-                  const prize_table = form.prize_table.slice();
-                  prize_table[i] = { ...p, place: e.target.value };
-                  setForm({ ...form, prize_table });
-                }}
-              />
-              <input
-                className="adm-prize-input"
-                type="number"
-                value={p.amount}
-                onChange={(e) => {
-                  const prize_table = form.prize_table.slice();
-                  prize_table[i] = { ...p, amount: Number(e.target.value) };
-                  setForm({ ...form, prize_table });
-                }}
-              />
-              <input
-                className="adm-input"
-                placeholder="суффикс"
-                value={p.suffix || ""}
-                onChange={(e) => {
-                  const prize_table = form.prize_table.slice();
-                  prize_table[i] = { ...p, suffix: e.target.value };
-                  setForm({ ...form, prize_table });
-                }}
-              />
-            </div>
-          ))}
-        </div>
-        <label className="adm-field">
-          Правила (по строке)
-          <textarea
-            className="adm-input"
-            rows={7}
-            value={form.event_rules}
-            onChange={(e) => setForm({ ...form, event_rules: e.target.value })}
-          />
-        </label>
-        <button className="adm-btn success" type="submit" disabled={busy === "set"}>
-          {busy === "set" ? "Сохраняем…" : "Сохранить параметры"}
-        </button>
-      </form>
-
-      <div className="adm-card">
-        <div className="adm-card-header">
+  if (section === "top") {
+    return (
+      <>
+        <div className="page-header">
           <div>
-            <div className="adm-card-title">Редактор Топ-10</div>
-            <p className="adm-hint">Переключатель рандома + карандаш для ручной правки. В рейтинг сезона — деп с начала таймера.</p>
+            <h1 className="page-title">Редактор Топ-10</h1>
+            <div className="page-subtitle">🎲 Включите рандомизацию для «живого» эффекта на сайте</div>
           </div>
-          <button className="adm-btn success" type="button" onClick={() => void saveTop()} disabled={busy === "top"}>
-            {busy === "top" ? "Сохраняем…" : "Сохранить топ-10"}
-          </button>
+          <div className="header-actions">
+            <button className="btn btn-success" type="button" onClick={() => void saveTop()} disabled={busy === "top"}>
+              {busy === "top" ? "Сохраняем…" : "💾 Сохранить"}
+            </button>
+          </div>
         </div>
-        <div className="adm-table-wrap">
-          <table className="adm-table">
-            <thead>
-              <tr>
-                <th>Место</th>
-                <th>Имя</th>
-                <th>Депозит</th>
-                <th>Оборот</th>
-                <th>Прибыль</th>
-                <th>Рандом</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {top.map((row) => (
-                <tr key={row.place}>
-                  <td className={`rank-cell${row.place <= 3 ? ` rank-${row.place}` : ""}`}>{row.place}</td>
-                  <td className="name-cell">{row.name}</td>
-                  <td>{money(row.dep)}</td>
-                  <td>{money(row.turn)}</td>
-                  <td className={row.pnl >= 0 ? "profit-cell" : "loss-cell"}>{money(row.pnl)}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className={`toggle-switch${row.randomize ? " active" : ""}`}
-                      aria-label="рандомизация"
-                      onClick={() => patchRow(row.place, { randomize: !row.randomize })}
-                    />
-                    <span className={`status-badge ${row.randomize ? "status-random" : "status-active"}`}>
-                      {row.randomize ? "ВКЛ" : "Выкл"}
-                    </span>
-                  </td>
-                  <td>
-                    <button type="button" className="adm-btn ghost icon" onClick={() => setEdit({ ...row })}>
-                      ✏️
-                    </button>
-                  </td>
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">🏆 Текущий Топ-10</div>
+            <span className="card-badge badge-live">● Редактируемый</span>
+          </div>
+          <div className="table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Место</th>
+                  <th>UID</th>
+                  <th>Имя</th>
+                  <th>Депозит</th>
+                  <th>Баланс</th>
+                  <th>Прибыль</th>
+                  <th>Доходность</th>
+                  <th>🎲 Рандом</th>
+                  <th>Действия</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {top.map((row) => (
+                  <tr key={row.place}>
+                    <td className={`rank-cell${row.place <= 3 ? ` rank-${row.place}` : ""}`}>{row.place}</td>
+                    <td className="uid-cell">{row.uid || "—"}</td>
+                    <td className="name-cell">{row.name}</td>
+                    <td>{money(row.dep)}</td>
+                    <td>{money(row.balance)}</td>
+                    <td className={row.pnl >= 0 ? "profit-cell" : "loss-cell"}>{money(row.pnl)}</td>
+                    <td className={row.return_pct >= 0 ? "profit-cell" : "loss-cell"}>
+                      {row.return_pct >= 0 ? "+" : ""}
+                      {row.return_pct.toFixed(1)}%
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className={`toggle-switch${row.randomize ? " active" : ""}`}
+                        aria-label="рандомизация"
+                        onClick={() => patchRow(row.place, { randomize: !row.randomize })}
+                      />
+                      <span className={`status-badge ${row.randomize ? "status-random" : "status-active"}`}>
+                        {row.randomize ? "ВКЛ" : "Выкл"}
+                      </span>
+                    </td>
+                    <td>
+                      <button type="button" className="btn btn-ghost btn-icon" onClick={() => setEdit({ ...row })}>
+                        ✏️
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
-
-      {edit ? (
-        <div className="adm-modal-overlay active" onClick={() => setEdit(null)}>
-          <div className="adm-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Редактирование лида #{edit.place}</h3>
-            <div className="adm-form-row">
-              <label className="adm-field">
-                Имя
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">➕ Найти UID в базе</div>
+          </div>
+          <div className="search-bar">
+            <input
+              value={addUid}
+              onChange={(e) => setAddUid(e.target.value)}
+              placeholder="Введите UID лида…"
+            />
+            <a className="btn btn-primary" href={addUid ? `/trader/${addUid.replace(/\D/g, "")}?from=admin` : "#"}>
+              Открыть карточку
+            </a>
+          </div>
+        </div>
+        {edit ? (
+          <div className="modal-overlay active" onClick={() => setEdit(null)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <h3>✏️ Редактирование лида</h3>
+              <p>
+                Место: <span style={{ color: "var(--neon-cyan)", fontWeight: 700 }}>#{edit.place}</span>
+              </p>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Имя</label>
+                  <input className="form-input" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">UID</label>
+                  <input
+                    className="form-input"
+                    value={edit.uid ?? ""}
+                    onChange={(e) => setEdit({ ...edit, uid: e.target.value ? Number(e.target.value) : null })}
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Депозит ($)</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    value={edit.dep}
+                    onChange={(e) => setEdit({ ...edit, dep: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Баланс ($)</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    value={edit.balance}
+                    onChange={(e) => setEdit({ ...edit, balance: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Оборот ($)</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    value={edit.turn}
+                    onChange={(e) => setEdit({ ...edit, turn: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Прибыль ($)</label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    value={edit.pnl}
+                    onChange={(e) => setEdit({ ...edit, pnl: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Доходность (%)</label>
                 <input
-                  className="adm-input"
-                  value={edit.name}
-                  onChange={(e) => setEdit({ ...edit, name: e.target.value })}
-                />
-              </label>
-              <label className="adm-field">
-                Депозит $
-                <input
-                  className="adm-input"
-                  type="number"
-                  value={edit.dep}
-                  onChange={(e) => setEdit({ ...edit, dep: Number(e.target.value) })}
-                />
-              </label>
-            </div>
-            <div className="adm-form-row">
-              <label className="adm-field">
-                Оборот $
-                <input
-                  className="adm-input"
-                  type="number"
-                  value={edit.turn}
-                  onChange={(e) => setEdit({ ...edit, turn: Number(e.target.value) })}
-                />
-              </label>
-              <label className="adm-field">
-                Баланс $
-                <input
-                  className="adm-input"
-                  type="number"
-                  value={edit.balance}
-                  onChange={(e) => setEdit({ ...edit, balance: Number(e.target.value) })}
-                />
-              </label>
-            </div>
-            <div className="adm-form-row">
-              <label className="adm-field">
-                Прибыль $
-                <input
-                  className="adm-input"
-                  type="number"
-                  value={edit.pnl}
-                  onChange={(e) => setEdit({ ...edit, pnl: Number(e.target.value) })}
-                />
-              </label>
-              <label className="adm-field">
-                Доходность %
-                <input
-                  className="adm-input"
+                  className="form-input"
                   type="number"
                   step={0.1}
                   value={edit.return_pct}
                   onChange={(e) => setEdit({ ...edit, return_pct: Number(e.target.value) })}
                 />
-              </label>
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn btn-ghost" onClick={() => setEdit(null)}>
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-success"
+                  onClick={() => {
+                    patchRow(edit.place, edit);
+                    setEdit(null);
+                  }}
+                >
+                  💾 Сохранить
+                </button>
+              </div>
             </div>
-            <div className="adm-modal-actions">
-              <button type="button" className="adm-btn ghost" onClick={() => setEdit(null)}>
-                Отмена
-              </button>
-              <button
-                type="button"
-                className="adm-btn success"
-                onClick={() => {
-                  patchRow(edit.place, edit);
-                  setEdit(null);
-                }}
-              >
-                Применить
-              </button>
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
+  if (section === "prizes") {
+    return (
+      <>
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">💰 Редактор призов</h1>
+            <div className="page-subtitle">Настройка призового фонда в долларах</div>
+          </div>
+          <div className="header-actions">
+            <button className="btn btn-success" type="button" onClick={() => void saveSettings()} disabled={busy === "set"}>
+              {busy === "set" ? "Сохраняем…" : "💾 Сохранить призы"}
+            </button>
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">🏆 Призовой фонд чемпионата</div>
+            <span className="card-badge badge-live">● Редактируемый</span>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Общий призовой пул ($)</label>
+            <input
+              className="form-input"
+              type="number"
+              value={form.prize_pool}
+              onChange={(e) => setForm({ ...form, prize_pool: Number(e.target.value) })}
+            />
+            <div className="form-hint">Общая сумма, которую вы готовы выплатить победителям</div>
+          </div>
+          <h3 style={{ fontFamily: "Orbitron, sans-serif", fontSize: 16, margin: "25px 0 15px", color: "var(--neon-gold)" }}>
+            Распределение призов
+          </h3>
+          <div className="prize-editor-grid">
+            {form.prize_table.map((p, i) => (
+              <div className="prize-card" key={i}>
+                <input
+                  className={`prize-place ${placeClass(i)}`}
+                  style={{
+                    background: "transparent",
+                    border: 0,
+                    textAlign: "center",
+                    width: "100%",
+                    fontFamily: "Orbitron, sans-serif",
+                    fontWeight: 700,
+                  }}
+                  value={p.place}
+                  onChange={(e) => patchPrize(i, { place: e.target.value })}
+                />
+                <input
+                  className="prize-input"
+                  type="number"
+                  value={p.amount}
+                  onChange={(e) => patchPrize(i, { amount: Number(e.target.value) })}
+                />
+                <input
+                  className="form-input"
+                  placeholder="суффикс"
+                  value={p.suffix || ""}
+                  onChange={(e) => patchPrize(i, { suffix: e.target.value })}
+                />
+                <div className="prize-label">{i === 0 ? "Победитель" : `Место ${i + 1}`}</div>
+              </div>
+            ))}
+          </div>
+          <div className="prize-total-bar">
+            <div className="label">Сумма призов:</div>
+            <div className={`total ${prizeSum > form.prize_pool ? "over" : prizeSum < form.prize_pool ? "under" : ""}`}>
+              {money(prizeSum)}
+            </div>
+          </div>
+          <div className="prize-total-bar pool-rest">
+            <div className="label">Остаток пула:</div>
+            <div className="total">{money(remaining)}</div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">📉 Компенсация потерь (Номинация B)</div>
+          </div>
+          <div className="form-row-3">
+            {form.prize_loss_pct.map((p, i) => (
+              <div className="form-group" key={i}>
+                <label className="form-label">{i + 1} место — % от убытка</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={p}
+                  onChange={(e) => {
+                    const prize_loss_pct = form.prize_loss_pct.slice();
+                    prize_loss_pct[i] = Number(e.target.value);
+                    setForm({ ...form, prize_loss_pct });
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="form-group">
+            <label className="form-label">Кап компенсации ($)</label>
+            <input
+              className="form-input"
+              type="number"
+              min={0}
+              value={form.loss_comp_cap}
+              onChange={(e) => setForm({ ...form, loss_comp_cap: Number(e.target.value) })}
+            />
+            <div className="form-hint">Максимальная выплата одному участнику по номинации B</div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">⚙️ Параметры чемпионата</h1>
+          <div className="page-subtitle">Длительность, интервалы, рандомизация</div>
+        </div>
+        <button className="btn btn-success" type="button" onClick={() => void saveSettings()} disabled={busy === "set"}>
+          {busy === "set" ? "Сохраняем…" : "💾 Сохранить все"}
+        </button>
+      </div>
+      <div className="card">
+        <div className="card-header">
+          <div className="card-title">⏱️ Длительность и время</div>
+          <span className="card-badge badge-live">UTC+2</span>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Название</label>
+          <input className="form-input" value={form.event_name} onChange={(e) => setForm({ ...form, event_name: e.target.value })} />
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Начало таймера</label>
+            <input
+              className="form-input"
+              type="datetime-local"
+              value={toLocalInput(form.event_start)}
+              onChange={(e) => setForm({ ...form, event_start: e.target.value })}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Конец чемпионата</label>
+            <input
+              className="form-input"
+              type="datetime-local"
+              value={toLocalInput(form.event_end)}
+              onChange={(e) => setForm({ ...form, event_end: e.target.value })}
+            />
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Мин. деп сезона, $</label>
+            <input
+              className="form-input"
+              type="number"
+              min={50}
+              value={form.event_min_deposit}
+              onChange={(e) => setForm({ ...form, event_min_deposit: Number(e.target.value) })}
+            />
+            <div className="form-hint">Строго от $50. Ниже — вне рейтинга.</div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Часовой пояс</label>
+            <input className="form-input" value="UTC+2" readOnly />
+          </div>
+        </div>
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label">Telegram-канал</label>
+            <input
+              className="form-input"
+              value={form.telegram_channel_url}
+              onChange={(e) => setForm({ ...form, telegram_channel_url: e.target.value })}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Ссылка Rami</label>
+            <input className="form-input" value={form.rami_url} onChange={(e) => setForm({ ...form, rami_url: e.target.value })} />
+          </div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Правила (по строке)</label>
+          <textarea
+            className="form-input"
+            rows={7}
+            value={form.event_rules}
+            onChange={(e) => setForm({ ...form, event_rules: e.target.value })}
+          />
+        </div>
+      </div>
+      <div className="card">
+        <div className="card-header">
+          <div className="card-title">🎲 Рандомизация Топ-10</div>
+          <span className="card-badge badge-live">● Настраиваемый интервал</span>
+        </div>
+        <div className="randomization-settings">
+          <h3>⚡ Интервал обновления данных</h3>
+          <div className="form-group">
+            <label className="form-label">Интервал рандомизации (минуты)</label>
+            <input
+              className="form-input"
+              type="number"
+              min={0.5}
+              max={1440}
+              step={0.5}
+              value={form.dummy_tick_minutes}
+              onChange={(e) => setForm({ ...form, dummy_tick_minutes: Number(e.target.value) })}
+            />
+            <div className="form-hint">Например: 0.5 = 30 секунд, 1 = 1 минута, 5 = 5 минут</div>
+          </div>
+          <div style={{ marginTop: 20, padding: 20, background: "rgba(0,0,0,0.3)", borderRadius: 10, textAlign: "center" }}>
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 10 }}>Текущий интервал:</div>
+            <div className="interval-display">{intervalLabel(form.dummy_tick_minutes)}</div>
+            <div style={{ fontSize: 14, color: "var(--neon-cyan)" }}>{intervalSec} секунд</div>
+          </div>
+          <div className="form-group" style={{ marginTop: 20 }}>
+            <label className="form-label">Быстрые presets</label>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {[0.5, 1, 5, 10, 30].map((m) => (
+                <button key={m} type="button" className="btn btn-ghost btn-sm" onClick={() => setForm({ ...form, dummy_tick_minutes: m })}>
+                  {m < 1 ? "30 сек" : `${m} мин`}
+                </button>
+              ))}
             </div>
           </div>
         </div>
-      ) : null}
+      </div>
     </>
   );
 }

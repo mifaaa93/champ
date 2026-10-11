@@ -1,3 +1,12 @@
+html.po-root,
+html.po-root body {
+  margin: 0;
+  background-color: #0a0e1a !important;
+  background-image: none !important;
+  font-family: Inter, sans-serif;
+  color: #e2e8f0;
+}
+
 .po {
   --bg-dark: #0a0e1a;
   --bg-card: rgba(15, 20, 35, 0.8);
