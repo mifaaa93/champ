@@ -58,6 +58,10 @@ type PublicEvent = {
   stats_deposits?: number;
   stats_turnover: number;
   top: BoardRow[];
+  top_a?: BoardRow[];
+  top_b?: BoardRow[];
+  show_a?: boolean;
+  show_b?: boolean;
 };
 
 type Tab =
@@ -124,7 +128,8 @@ function detailText(detail: unknown): string {
 }
 
 function money(n: number) {
-  return `$${Math.round(n).toLocaleString("en-US")}`;
+  const sign = n < 0 ? "-" : "";
+  return `${sign}$${Math.abs(Math.round(n)).toLocaleString("en-US")}`;
 }
 
 export default function AdminPage() {
@@ -413,11 +418,15 @@ export default function AdminPage() {
   );
 
   const avgReturn = useMemo(() => {
-    const rows = event?.top || [];
+    const rows = event?.top_a || event?.top || [];
     if (!rows.length) return 0;
     const sum = rows.reduce((acc, r) => acc + Number(r.return_pct || 0), 0);
     return sum / rows.length;
   }, [event]);
+  const topA = event?.top_a || event?.top || [];
+  const topB = event?.top_b || [];
+  const showA = event?.show_a !== false;
+  const showB = event?.show_b !== false;
 
   const groups = ["Основное", "Настройки", "Управление", "Аналитика"];
 
@@ -593,13 +602,24 @@ export default function AdminPage() {
               </div>
             </button>
           </div>
-          <div className="card">
-            <div className="card-header">
-              <div className="card-title">🔥 Топ-5 текущего рейтинга</div>
-              <span className="card-badge badge-live">● LIVE</span>
+          {showA ? (
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title">Топ-5 доходности</div>
+                <span className="card-badge badge-live">● LIVE</span>
+              </div>
+              {rankingTable(topA, 5)}
             </div>
-            {rankingTable(event?.top || [], 5)}
-          </div>
+          ) : null}
+          {showB ? (
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title">Топ-5 потерь</div>
+                <span className="card-badge badge-live">● LIVE</span>
+              </div>
+              {rankingTable(topB, 5)}
+            </div>
+          ) : null}
         </section>
 
         <section className={`section ${tab === "participants" ? "active" : ""}`}>
@@ -626,13 +646,28 @@ export default function AdminPage() {
           <div className="page-header">
             <div>
               <h1 className="page-title">Рейтинг Live</h1>
-              <div className="page-subtitle">Обновление с публичной витрины</div>
+              <div className="page-subtitle">Оба публичных топа: доходность и потери</div>
             </div>
             <button className="btn btn-ghost" type="button" onClick={() => void loadEvent()}>
               🔄 Обновить
             </button>
           </div>
-          <div className="card">{rankingTable(event?.top || [])}</div>
+          {showA ? (
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title">Доходность %</div>
+              </div>
+              {rankingTable(topA)}
+            </div>
+          ) : null}
+          {showB ? (
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title">Потери $</div>
+              </div>
+              {rankingTable(topB)}
+            </div>
+          ) : null}
         </section>
 
         <section className={`section ${tab === "top" || tab === "prizes" || tab === "params" ? "active" : ""}`}>
