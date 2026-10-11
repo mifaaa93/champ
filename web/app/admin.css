@@ -95,11 +95,13 @@ html.admin-root .sidebar {
   width: var(--sidebar-width);
   background: var(--bg-sidebar);
   border-right: 1px solid var(--glass-border);
-  padding: 30px 0 90px;
+  padding: 30px 0 20px;
   position: fixed;
   height: 100vh;
   overflow-y: auto;
   z-index: 100;
+  display: flex;
+  flex-direction: column;
 }
 html.admin-root .sidebar-logo {
   font-family: Orbitron, sans-serif;
@@ -176,11 +178,9 @@ html.admin-root .nav-item .badge {
   font-weight: 700;
 }
 html.admin-root .sidebar-footer {
-  position: absolute;
-  bottom: 20px;
-  left: 0;
-  right: 0;
-  padding: 0 25px;
+  position: static;
+  margin-top: auto;
+  padding: 16px 25px 0;
 }
 html.admin-root .admin-status {
   display: flex;

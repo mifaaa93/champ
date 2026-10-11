@@ -675,7 +675,7 @@ export default function AdminPage() {
           <div className="page-header">
             <div>
               <h1 className="page-title">Telegram бот</h1>
-              <div className="page-subtitle">Шаблоны постов. Токен бота лежит в окружении сервера.</div>
+              <div className="page-subtitle">Токен, группа и шаблоны постов.</div>
             </div>
           </div>
           <form className="card" onSubmit={save}>
