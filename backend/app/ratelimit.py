@@ -27,13 +27,20 @@ class SlidingWindow:
 limiter = SlidingWindow()
 
 
-def client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()[:64]
-    real = request.headers.get("x-real-ip", "").strip()
+def ip_from_headers(x_real: str, forwarded: str, fallback: str = "") -> str:
+    real = (x_real or "").strip()
     if real:
         return real[:64]
-    if request.client and request.client.host:
-        return request.client.host
-    return "unknown"
+    parts = [part.strip() for part in (forwarded or "").split(",") if part.strip()]
+    if parts:
+        return parts[-1][:64]
+    return (fallback or "unknown")[:64]
+
+
+def client_ip(request: Request) -> str:
+    fallback = request.client.host if request.client and request.client.host else ""
+    return ip_from_headers(
+        request.headers.get("x-real-ip", ""),
+        request.headers.get("x-forwarded-for", ""),
+        fallback,
+    )

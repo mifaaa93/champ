@@ -23,5 +23,6 @@ ENV API_INTERNAL_URL=$API_INTERNAL_URL
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/with-client-ip.js ./with-client-ip.js
 EXPOSE 3000
-CMD ["node", "server.js"]
+CMD ["node", "with-client-ip.js"]

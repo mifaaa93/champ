@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session
 from app.models import DayLedger, DayResult, Participant, Snapshot, Trader
 from app.ratelimit import client_ip, limiter
-
 from app.services.freeze import load_rank_rows
 from app.ledger import money as to_money
 from app.services.ranking import loss_pool, loss_target, yield_pool, yield_target
@@ -24,6 +23,19 @@ from app.timezone import (
 )
 
 router = APIRouter(prefix="/public")
+
+
+async def limit_check(request: Request, scope: str) -> None:
+    ip = client_ip(request)
+    burst_ok, burst_retry = await limiter.allow(f"{scope}:burst:{ip}", 8, 60)
+    if not burst_ok:
+        raise HTTPException(429, f"Слишком часто. Подождите {burst_retry} с.")
+    hour_ok, hour_retry = await limiter.allow(f"{scope}:hour:{ip}", 40, 3600)
+    if not hour_ok:
+        raise HTTPException(
+            429,
+            f"Лимит проверок с этого адреса. Попробуйте через {max(1, hour_retry // 60)} мин.",
+        )
 
 
 @router.get("/meta")
@@ -55,10 +67,7 @@ async def event_page(session: AsyncSession = Depends(get_session)) -> dict:
 async def event_lookup(
     uid: int, request: Request, session: AsyncSession = Depends(get_session)
 ) -> dict:
-    ip = client_ip(request)
-    ok, retry = await limiter.allow(f"elook:{ip}", 20, 60)
-    if not ok:
-        raise HTTPException(429, f"Слишком часто. Подождите {retry} с.")
+    await limit_check(request, "elook")
     return await lookup_event_uid(session, uid)
 
 
@@ -147,10 +156,7 @@ async def register(
 
 @router.get("/lookup/{uid}")
 async def lookup(uid: int, request: Request, session: AsyncSession = Depends(get_session)) -> dict:
-    ip = client_ip(request)
-    ok, retry = await limiter.allow(f"lookup:{ip}", 20, 60)
-    if not ok:
-        raise HTTPException(429, f"Слишком часто. Подождите {retry} с.")
+    await limit_check(request, "lookup")
     if uid < 100_000 or uid > 9_999_999_999:
         raise HTTPException(400, "Некорректный UID")
 
