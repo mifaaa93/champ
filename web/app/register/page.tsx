@@ -1,7 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { Nav } from "@/components/Nav";
 
 function detailText(detail: unknown): string {
   if (typeof detail === "string") return detail;
@@ -14,8 +15,9 @@ function detailText(detail: unknown): string {
   return "Не удалось зарегистрировать";
 }
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
+  const params = useSearchParams();
   const [uid, setUid] = useState("");
   const [nickname, setNickname] = useState("");
   const [telegram, setTelegram] = useState("");
@@ -24,6 +26,11 @@ export default function RegisterPage() {
   const [err, setErr] = useState("");
   const [fieldErr, setFieldErr] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const q = (params.get("uid") || "").replace(/\D/g, "").slice(0, 10);
+    if (q) setUid(q);
+  }, [params]);
 
   function validate(): boolean {
     const next: Record<string, string> = {};
@@ -72,6 +79,8 @@ export default function RegisterPage() {
   }
 
   return (
+    <>
+    <Nav />
     <main className="wrap">
       <div className="kicker">ENTRY</div>
       <h1>Регистрация в кубок</h1>
@@ -120,5 +129,20 @@ export default function RegisterPage() {
         {err ? <p className="err">{String(err)}</p> : null}
       </form>
     </main>
+    </>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="wrap">
+          <p className="note">Загрузка формы…</p>
+        </main>
+      }
+    >
+      <RegisterForm />
+    </Suspense>
   );
 }

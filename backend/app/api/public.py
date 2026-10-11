@@ -7,10 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_session
 from app.models import DayLedger, DayResult, Participant, Snapshot, Trader
 from app.ratelimit import client_ip, limiter
-from app.schemas import RegisterIn, day_cash, dec, row_out
+
 from app.services.freeze import load_rank_rows
-from app.services.ranking import eligible_only, sort_loss, sort_yield
+from app.ledger import money as to_money
+from app.services.ranking import loss_pool, loss_target, yield_pool, yield_target
+from app.services.event import invite_preview, lookup_event_uid, public_event, register_event_name
 from app.services.register import register_participant
+from app.schemas import EventRegisterIn, RegisterIn, day_cash, dec, row_out
 from app.settings_service import get_settings
 from app.timezone import (
     TZ_LABEL,
@@ -41,6 +44,59 @@ async def meta(session: AsyncSession = Depends(get_session)) -> dict:
         "loss_comp_cap": cfg["loss_comp_cap"],
         "prize_places": cfg["prize_places"],
     }
+
+
+@router.get("/event")
+async def event_page(session: AsyncSession = Depends(get_session)) -> dict:
+    return await public_event(session)
+
+
+@router.get("/event/lookup/{uid}")
+async def event_lookup(
+    uid: int, request: Request, session: AsyncSession = Depends(get_session)
+) -> dict:
+    ip = client_ip(request)
+    ok, retry = await limiter.allow(f"elook:{ip}", 20, 60)
+    if not ok:
+        raise HTTPException(429, f"Слишком часто. Подождите {retry} с.")
+    return await lookup_event_uid(session, uid)
+
+
+@router.post("/event/register")
+async def event_register(
+    body: EventRegisterIn, request: Request, session: AsyncSession = Depends(get_session)
+) -> dict:
+    ip = client_ip(request)
+    burst_ok, burst_retry = await limiter.allow(f"ereg:burst:{ip}", 2, 20)
+    if not burst_ok:
+        raise HTTPException(429, f"Слишком часто. Подождите {burst_retry} с.")
+    hour_ok, hour_retry = await limiter.allow(f"ereg:hour:{ip}", 5, 3600)
+    if not hour_ok:
+        raise HTTPException(
+            429,
+            f"Лимит регистраций с этого адреса. Попробуйте через {max(1, hour_retry // 60)} мин.",
+        )
+    if body.website.strip():
+        return {
+            "uid": body.uid,
+            "status": "ok",
+            "you": {
+                "uid": body.uid,
+                "name": body.nickname,
+                "rank": 80,
+                "dep": 0,
+                "turn": 0,
+                "beaten": 0,
+                "total": 1,
+                "neighbors": [],
+            },
+        }
+    return await register_event_name(session, body.uid, body.nickname)
+
+
+@router.get("/event/invite/{uid}")
+async def event_invite(uid: int, session: AsyncSession = Depends(get_session)) -> dict:
+    return await invite_preview(session, uid)
 
 
 @router.post("/register")
@@ -89,6 +145,99 @@ async def register(
     }
 
 
+@router.get("/lookup/{uid}")
+async def lookup(uid: int, request: Request, session: AsyncSession = Depends(get_session)) -> dict:
+    ip = client_ip(request)
+    ok, retry = await limiter.allow(f"lookup:{ip}", 20, 60)
+    if not ok:
+        raise HTTPException(429, f"Слишком часто. Подождите {retry} с.")
+    if uid < 100_000 or uid > 9_999_999_999:
+        raise HTTPException(400, "Некорректный UID")
+
+    cfg = await get_settings(session)
+    day = dubai_today()
+    rows = await load_rank_rows(session, day)
+    y_pool = yield_pool(rows)
+    min_pct = float(cfg.get("min_return_pct") or 0)
+    if min_pct > 0:
+        y_pool = [r for r in y_pool if float(r.return_pct) >= min_pct]
+    l_pool = loss_pool(rows)
+    top_n = int(cfg["top_n"])
+    prizes = int(cfg["prize_places"])
+
+    part = (
+        await session.execute(select(Participant).where(Participant.uid == uid))
+    ).scalar_one_or_none()
+    me = next((r for r in rows if r.uid == uid), None)
+
+    min_dep_d = to_money(cfg["min_day_deposit"])
+    deposited = 0.0
+    if me:
+        deposited = float(max(me.day_deposits, 0))
+    need_deposit = max(0.0, float(min_dep_d) - deposited)
+
+    y_place = next((i for i, r in enumerate(y_pool, 1) if r.uid == uid), None)
+    l_place = next((i for i, r in enumerate(l_pool, 1) if r.uid == uid), None)
+
+    reasons = (me.dq_reason.split(",") if me and me.dq_reason else []) if me and not me.eligible else []
+    if not part:
+        status = "not_registered"
+    elif not me or not me.eligible:
+        status = "not_in_day"
+        if me:
+            reasons = [x for x in (me.dq_reason or "").split(",") if x]
+        else:
+            reasons = ["no_start"]
+    elif y_place is None and l_place is None:
+        status = "not_in_lists"
+    else:
+        status = "ranked"
+
+    snapshot = None
+    if me:
+        snapshot = {
+            "nickname": me.nickname,
+            "eligible": me.eligible,
+            "dq_reason": me.dq_reason,
+            "balance": dec(me.last_balance),
+            "pnl": dec(me.contest_pnl),
+            "trading_pnl": dec(me.trading_pnl),
+            "return_pct": dec(me.return_pct),
+            "deposits": dec(me.day_deposits),
+            "withdrawals": dec(me.day_withdrawals),
+            "basis": dec(me.basis),
+        }
+
+    return {
+        "uid": uid,
+        "day": str(day),
+        "status": status,
+        "registered": part is not None,
+        "reasons": reasons,
+        "need_deposit": need_deposit,
+        "min_day_deposit": float(min_dep_d),
+        "require_trade": bool(cfg["require_trade"]),
+        "top_n": top_n,
+        "prize_places": prizes,
+        "min_return_pct": min_pct,
+        "yield": {
+            "place": y_place,
+            "count": len(y_pool),
+            "top_n": yield_target(me, y_pool, top_n),
+            "prize": yield_target(me, y_pool, prizes),
+            "first": yield_target(me, y_pool, 1),
+        },
+        "loss": {
+            "place": l_place,
+            "count": len(l_pool),
+            "top_n": loss_target(me, l_pool, top_n),
+            "prize": loss_target(me, l_pool, prizes),
+            "first": loss_target(me, l_pool, 1),
+        },
+        "you": snapshot,
+    }
+
+
 @router.get("/leaderboard")
 async def leaderboard(
     nomination: str = Query("yield", pattern="^(yield|loss)$"),
@@ -98,8 +247,7 @@ async def leaderboard(
     cfg = await get_settings(session)
     day = day or dubai_today()
     rows = await load_rank_rows(session, day)
-    live = eligible_only(rows)
-    ordered = sort_yield(live) if nomination == "yield" else sort_loss(live)
+    ordered = yield_pool(rows) if nomination == "yield" else loss_pool(rows)
     top = ordered[: int(cfg["top_n"])]
     out = []
     for i, r in enumerate(top, 1):

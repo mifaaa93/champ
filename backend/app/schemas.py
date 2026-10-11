@@ -68,6 +68,16 @@ class SettingsPatch(BaseModel):
     tg_final_header: str | None = Field(default=None, max_length=500)
     tg_final_yield_row: str | None = Field(default=None, max_length=400)
     tg_final_loss_row: str | None = Field(default=None, max_length=400)
+    event_name: str | None = Field(default=None, max_length=64)
+    event_end: str | None = Field(default=None, max_length=64)
+    prize_pool: float | None = Field(default=None, ge=0, le=10_000_000)
+    prize_table: list[dict] | None = None
+    stats_players: int | None = Field(default=None, ge=0, le=10_000_000)
+    stats_turnover: float | None = Field(default=None, ge=0, le=10_000_000_000)
+    telegram_channel_url: str | None = Field(default=None, max_length=300)
+    rami_url: str | None = Field(default=None, max_length=300)
+    event_rules: list[str] | None = None
+    activity: list[dict] | None = None
 
     @field_validator("prize_yield")
     @classmethod
@@ -101,6 +111,24 @@ class SettingsPatch(BaseModel):
         if self.prize_loss_pct is not None and len(self.prize_loss_pct) != places:
             raise ValueError("Число процентов просадки должно совпадать с числом мест")
         return self
+
+
+class EventRegisterIn(BaseModel):
+    uid: int = Field(ge=100_000_000, le=9_999_999_999)
+    nickname: str = Field(min_length=1, max_length=32)
+    website: str = Field(default="", max_length=200)
+
+    @field_validator("nickname")
+    @classmethod
+    def clean_nick(cls, value: str) -> str:
+        value = RegisterIn.clean_nick(value)
+        if not value:
+            raise ValueError("Введи имя")
+        return value
+
+
+class ShowcaseIn(BaseModel):
+    rows: list[dict]
 
 
 def dec(value: Decimal | int | float | None) -> float:

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Nav } from "@/components/Nav";
 import { api } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,8 @@ export default async function ArchivePage() {
     days = [];
   }
   return (
+    <>
+    <Nav />
     <main className="wrap">
       <div className="kicker">ARCHIVE</div>
       <h1>Закрытые дни</h1>
@@ -28,5 +31,6 @@ export default async function ArchivePage() {
         )}
       </div>
     </main>
+    </>
   );
 }

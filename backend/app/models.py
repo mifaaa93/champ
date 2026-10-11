@@ -155,3 +155,16 @@ class PublishLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class ShowcaseLead(Base):
+    __tablename__ = "showcase_leads"
+
+    place: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(64), default="")
+    dep: Mapped[Decimal] = mapped_column(Money, default=0)
+    turn: Mapped[Decimal] = mapped_column(Money, default=0)
+    uid: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

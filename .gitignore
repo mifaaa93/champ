@@ -14,3 +14,6 @@ web/out/
 .DS_Store
 .idea/
 .vscode/
+*.mp4
+image0.png
+image1.png

@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Hint } from "@/components/Hint";
+import { EventPanel } from "@/components/EventPanel";
 import { UsersTable, type ParticipantRow } from "@/components/UsersTable";
 import { apiPath } from "@/lib/api";
 import {
@@ -83,7 +84,7 @@ export default function AdminPage() {
   const [tgCtx, setTgCtx] = useState<TgContext | null>(null);
   const [users, setUsers] = useState<ParticipantRow[]>([]);
   const [usersDay, setUsersDay] = useState("");
-  const [tab, setTab] = useState<"users" | "settings">("users");
+  const [tab, setTab] = useState<"users" | "settings" | "event">("event");
 
   useEffect(() => {
     const saved = sessionStorage.getItem(TOKEN_KEY);
@@ -91,16 +92,18 @@ export default function AdminPage() {
       setToken(saved);
       void load(saved);
     }
-    if (typeof window !== "undefined" && window.location.hash === "#settings") {
-      setTab("settings");
+    if (typeof window !== "undefined") {
+      if (window.location.hash === "#settings") setTab("settings");
+      if (window.location.hash === "#event") setTab("event");
+      if (window.location.hash === "#users") setTab("users");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function openTab(next: "users" | "settings") {
+  function openTab(next: "users" | "settings" | "event") {
     setTab(next);
     if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", next === "users" ? "/admin#users" : "/admin#settings");
+      window.history.replaceState(null, "", `/admin#${next}`);
     }
   }
 
@@ -282,8 +285,8 @@ export default function AdminPage() {
         day?: string;
         count?: number;
       };
-      if (data.status === "already_frozen") {
-        setStatus(`День ${data.day} уже закрыт.`);
+      if (data.status === "refrozen") {
+        setStatus(`День ${data.day} пересчитан, записей: ${data.count ?? 0}.`);
       } else {
         setStatus(`День ${data.day} зафиксирован, записей: ${data.count ?? 0}.`);
       }
@@ -367,6 +370,9 @@ export default function AdminPage() {
       <div className="kicker">OPS</div>
       <h1>Админка</h1>
       <div className="tabs">
+        <button type="button" className={`tab ${tab === "event" ? "on" : ""}`} onClick={() => openTab("event")}>
+          Ивент
+        </button>
         <button type="button" className={`tab ${tab === "users" ? "on" : ""}`} onClick={() => openTab("users")}>
           Участники
         </button>
@@ -386,6 +392,13 @@ export default function AdminPage() {
       </div>
       {status ? <p className="ok">{status}</p> : null}
       {err ? <p className="err">{err}</p> : null}
+      {tab === "event" ? (
+        <EventPanel
+          adminFetch={adminFetch}
+          onStatus={setStatus}
+          onError={setErr}
+        />
+      ) : null}
       {tab === "users" ? (
         <UsersTable
           users={users}

@@ -43,8 +43,10 @@ async def freeze_day(session: AsyncSession, day) -> dict:
     existing = (
         await session.execute(select(DayResult).where(DayResult.day == day))
     ).scalars().all()
-    if existing:
-        return {"status": "already_frozen", "day": str(day), "count": len(existing)}
+    replaced = bool(existing)
+    for row in existing:
+        await session.delete(row)
+    await session.flush()
 
     cfg = await get_settings(session)
     rows = await load_rank_rows(session, day)
@@ -86,4 +88,9 @@ async def freeze_day(session: AsyncSession, day) -> dict:
         ]
         for nom, items in winners.items()
     }
-    return {"status": "frozen", "day": str(day), "count": count, "winners": safe}
+    return {
+        "status": "refrozen" if replaced else "frozen",
+        "day": str(day),
+        "count": count,
+        "winners": safe,
+    }

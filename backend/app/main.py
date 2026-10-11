@@ -21,6 +21,9 @@ async def lifespan(_: FastAPI):
     await init_db()
     async with SessionLocal() as session:
         await get_settings(session)
+        from app.services.event import ensure_showcase
+
+        await ensure_showcase(session)
     log.info("api up v%s", __version__)
     yield
 

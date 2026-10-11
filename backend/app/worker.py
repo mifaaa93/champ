@@ -15,6 +15,9 @@ async def main() -> None:
     await init_db()
     async with SessionLocal() as session:
         await get_settings(session)
+        from app.services.event import ensure_showcase
+
+        await ensure_showcase(session)
     await recover()
     try:
         await job_statistics()

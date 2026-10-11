@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PO Tournament | Закрытая Лига</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;500;600;700&display=swap');
+
+        :root {
+            --bg-dark: #0a0e1a;
+            --bg-card: rgba(15, 20, 35, 0.8);
+            --neon-cyan: #00f3ff;
+            --neon-purple: #b026ff;
+            --neon-gold: #ffd700;
+            --neon-orange: #ff8c00;
+            --neon-green: #00ff88;
+            --text-main: #e2e8f0;
+            --text-dim: #64748b;
+            --glass-border: rgba(255, 255, 255, 0.08);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: 
+                radial-gradient(ellipse at 20% 0%, rgba(176, 38, 255, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 100%, rgba(0, 243, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(255, 215, 0, 0.03) 0%, transparent 70%);
+            z-index: -1;
+            animation: bgPulse 8s ease-in-out infinite alternate;
+        }
+
+        @keyframes bgPulse {
+            0% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        .container { max-width: 1100px; margin: 0 auto; padding: 30px 20px; }
+
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 25px 0; margin-bottom: 30px;
+            border-bottom: 1px solid var(--glass-border);
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .logo {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 26px; font-weight: 900;
+            background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            letter-spacing: 2px;
+        }
+        .prize-badge {
+            background: linear-gradient(135deg, var(--neon-gold), var(--neon-orange));
+            color: #000; padding: 10px 24px; border-radius: 50px;
+            font-weight: 700; font-size: 14px;
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.4);
+            animation: prizeGlow 2s ease-in-out infinite alternate;
+        }
+        @keyframes prizeGlow {
+            0% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.3); }
+            100% { box-shadow: 0 0 40px rgba(255, 215, 0, 0.6); }
+        }
+
+        /* COUNTDOWN */
+        .countdown-section {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 40px;
+            backdrop-filter: blur(20px);
+            position: relative;
+            overflow: hidden;
+        }
+        .countdown-section::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--neon-gold), transparent);
+        }
+        .countdown-label {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 14px;
+            color: var(--neon-gold);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 15px;
+        }
+        .countdown-timer {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .countdown-item {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(255, 215, 0, 0.2);
+            border-radius: 12px;
+            padding: 15px 20px;
+            min-width: 80px;
+        }
+        .countdown-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 36px;
+            font-weight: 900;
+            color: var(--neon-gold);
+            text-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+        }
+        .countdown-unit {
+            font-size: 11px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 5px;
+        }
+
+        /* LIVE STATS */
+        .live-stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 40px;
+        }
+        .live-stat {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            padding: 20px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+        }
+        .live-stat:hover {
+            border-color: rgba(0, 243, 255, 0.3);
+            transform: translateY(-3px);
+        }
+        .live-stat-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--neon-cyan);
+            margin-bottom: 5px;
+        }
+        .live-stat-label {
+            font-size: 12px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .live-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: var(--neon-green);
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: livePulse 1.5s ease-in-out infinite;
+        }
+        @keyframes livePulse {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.4); }
+            50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(0, 255, 136, 0); }
+        }
+
+        /* ACTIVITY FEED */
+        .activity-feed {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 40px;
+            backdrop-filter: blur(20px);
+        }
+        .activity-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        .activity-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 14px;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .activity-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: 120px;
+            overflow: hidden;
+        }
+        .activity-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 15px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            font-size: 13px;
+            animation: slideIn 0.5s ease;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .activity-avatar { font-size: 20px; }
+        .activity-text { flex: 1; color: var(--text-dim); }
+        .activity-text b { color: var(--neon-cyan); }
+        .activity-time { font-size: 11px; color: var(--text-dim); }
+
+        /* SECTION TITLE */
+        .section-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 32px; font-weight: 700;
+            text-align: center; margin-bottom: 40px;
+            background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple), var(--neon-cyan));
+            background-size: 200% auto;
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            animation: shimmer 3s linear infinite;
+        }
+        @keyframes shimmer {
+            0% { background-position: 0% center; }
+            100% { background-position: 200% center; }
+        }
+
+        /* ===== TOP 3 GRID - НОВЫЙ ДИЗАЙН ===== */
+        .top3-grid { 
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 25px; 
+            margin-bottom: 40px;
+            align-items: end; /* Выравнивание по нижнему краю */
+        }
+        
+        .top-card {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 30px 20px 25px;
+            text-align: center;
+            backdrop-filter: blur(20px);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .top-card:hover { transform: translateY(-8px); }
+
+        /* 1st place - золотой */
+        .top-card.first {
+            border-color: rgba(255, 215, 0, 0.4);
+            order: 2;
+            transform: scale(1.08);
+            box-shadow: 0 0 80px rgba(255, 215, 0, 0.25), inset 0 0 30px rgba(255, 215, 0, 0.05);
+            padding-top: 50px; /* Место для короны */
+        }
+        .top-card.first::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, transparent, var(--neon-gold), transparent);
+        }
+        .top-card.first::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(ellipse at top, rgba(255, 215, 0, 0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .top-card.first:hover { transform: scale(1.08) translateY(-8px); }
+
+        /* 2nd place - серебряный */
+        .top-card.second {
+            border-color: rgba(192, 192, 192, 0.3);
+            order: 1;
+            box-shadow: 0 0 40px rgba(192, 192, 192, 0.1);
+        }
+        .top-card.second::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, transparent, #c0c0c0, transparent);
+        }
+
+        /* 3rd place - бронзовый */
+        .top-card.third {
+            border-color: rgba(205, 127, 50, 0.3);
+            order: 3;
+            box-shadow: 0 0 40px rgba(205, 127, 50, 0.1);
+        }
+        .top-card.third::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, transparent, #cd7f32, transparent);
+        }
+
+        /* Корона для 1 места */
+        .crown {
+            position: absolute;
+            top: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 50px;
+            animation: crownBounce 2s ease-in-out infinite;
+            filter: drop-shadow(0 0 15px rgba(255, 215, 0, 0.6));
+            z-index: 2;
+        }
+        @keyframes crownBounce {
+            0%, 100% { transform: translateX(-50%) translateY(0) rotate(-2deg); }
+            50% { transform: translateX(-50%) translateY(-8px) rotate(2deg); }
+        }
+
+        /* Аватар / Инициалы */
+        .avatar-wrapper {
+            position: relative;
+            margin-bottom: 15px;
+            z-index: 1;
+        }
+        .bot-avatar {
+            font-size: 70px;
+            display: block;
+            filter: drop-shadow(0 0 15px rgba(255,255,255,0.3));
+            line-height: 1;
+        }
+        .top-card.first .bot-avatar { font-size: 80px; }
+        .top-card.second .bot-avatar,
+        .top-card.third .bot-avatar { font-size: 70px; }
+
+        /* Круг с инициалами (fallback) */
+        .initials-avatar {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 28px;
+            font-weight: 900;
+            color: white;
+            margin: 0 auto;
+            position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+        }
+        .top-card.first .initials-avatar {
+            width: 90px;
+            height: 90px;
+            font-size: 32px;
+            background: linear-gradient(135deg, #ffd700, #ff8c00);
+            border: 3px solid rgba(255, 215, 0, 0.5);
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.4);
+        }
+        .top-card.second .initials-avatar {
+            background: linear-gradient(135deg, #c0c0c0, #808080);
+            border: 3px solid rgba(192, 192, 192, 0.5);
+            box-shadow: 0 0 25px rgba(192, 192, 192, 0.3);
+        }
+        .top-card.third .initials-avatar {
+            background: linear-gradient(135deg, #cd7f32, #8b4513);
+            border: 3px solid rgba(205, 127, 50, 0.5);
+            box-shadow: 0 0 25px rgba(205, 127, 50, 0.3);
+        }
+
+        /* Медаль рядом с именем */
+        .medal-badge {
+            display: inline-block;
+            font-size: 20px;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+
+        .bot-name {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 5px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .top-card.first .bot-name { font-size: 26px; }
+
+        .bot-rank {
+            font-family: 'Orbitron', sans-serif;
+            color: var(--text-dim);
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .top-card.first .bot-rank { color: var(--neon-gold); }
+        .top-card.second .bot-rank { color: #c0c0c0; }
+        .top-card.third .bot-rank { color: #cd7f32; }
+
+        /* Статистика */
+        .bot-stats {
+            display: flex;
+            justify-content: space-around;
+            gap: 10px;
+            width: 100%;
+            margin-top: auto; /* Прижимает к низу */
+        }
+        .stat-box {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 12px 10px;
+            flex: 1;
+            transition: all 0.3s;
+        }
+        .top-card:hover .stat-box {
+            border-color: rgba(0, 243, 255, 0.2);
+        }
+        .stat-label-small {
+            font-size: 10px;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+        .stat-val {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            font-size: 16px;
+            color: var(--neon-cyan);
+        }
+        .top-card.first .stat-val { color: var(--neon-gold); }
+
+        /* REST TOP 10 */
+        .rest-top10 {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+            margin-bottom: 60px;
+        }
+        .mini-card {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 14px;
+            padding: 18px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+        }
+        .mini-card:hover {
+            border-color: rgba(176, 38, 255, 0.3);
+            transform: translateX(5px);
+        }
+        .mini-card .rank {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 28px; font-weight: 900;
+            color: var(--neon-purple);
+            width: 50px;
+            text-align: center;
+        }
+        .mini-card .info { flex: 1; margin: 0 15px; }
+        .mini-card .name {
+            font-weight: 600;
+            font-size: 16px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .mini-card .name .avatar-small { font-size: 20px; }
+        .mini-card .id { font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+        .mini-card .dep {
+            font-weight: 700;
+            color: var(--neon-cyan);
+            font-size: 16px;
+        }
+
+        /* SEARCH */
+        .search-section {
+            margin: 60px 0;
+            text-align: center;
+            background: var(--bg-card);
+            padding: 50px 40px;
+            border-radius: 24px;
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(20px);
+            position: relative;
+            overflow: hidden;
+        }
+        .search-section::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, var(--neon-cyan), var(--neon-purple), transparent);
+        }
+        .search-section .section-title { font-size: 28px; margin-bottom: 15px; }
+        .search-subtitle {
+            color: var(--text-dim);
+            font-size: 15px;
+            margin-bottom: 30px;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+            line-height: 1.6;
+        }
+        .search-wrapper {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .search-input {
+            width: 100%;
+            max-width: 350px;
+            padding: 16px 24px;
+            font-size: 18px;
+            font-family: 'Inter', monospace;
+            background: rgba(0,0,0,0.4);
+            border: 2px solid var(--glass-border);
+            border-radius: 12px;
+            color: white;
+            outline: none;
+            transition: all 0.3s;
+        }
+        .search-input:focus {
+            border-color: var(--neon-cyan);
+            box-shadow: 0 0 25px rgba(0, 243, 255, 0.2);
+        }
+        .search-input::placeholder { color: var(--text-dim); }
+        .search-btn {
+            padding: 16px 36px;
+            font-size: 16px;
+            font-weight: 700;
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 1px;
+            background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+            border: none;
+            border-radius: 12px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+        .search-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(176, 38, 255, 0.5);
+        }
+        .hint {
+            font-size: 12px;
+            color: var(--text-dim);
+            margin-top: 20px;
+        }
+
+        /* RESULT */
+        #result-section { display: none; margin-bottom: 60px; animation: slideUp 0.6s ease; }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .welcome-msg {
+            text-align: center;
+            font-size: 28px;
+            font-weight: 300;
+            margin-bottom: 40px;
+            color: var(--text-main);
+        }
+        .welcome-msg span {
+            font-weight: 700;
+            color: var(--neon-gold);
+            font-family: 'Orbitron', sans-serif;
+        }
+        .profile-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+        .rank-card {
+            background: linear-gradient(135deg, rgba(255,215,0,0.1), rgba(255,140,0,0.05));
+            border: 1px solid rgba(255, 215, 0, 0.3);
+            border-radius: 20px;
+            padding: 35px 25px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .rank-card::before {
+            content: '';
+            position: absolute;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: radial-gradient(circle, rgba(255,215,0,0.1) 0%, transparent 70%);
+            animation: rankPulse 3s ease-in-out infinite;
+        }
+        @keyframes rankPulse {
+            0%, 100% { transform: scale(1); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 1; }
+        }
+        .rank-label {
+            color: var(--text-dim);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+            position: relative;
+        }
+        .rank-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 72px;
+            font-weight: 900;
+            color: var(--neon-gold);
+            text-shadow: 0 0 30px rgba(255,215,0,0.4);
+            line-height: 1;
+            position: relative;
+        }
+        .rank-sub {
+            margin-top: 20px;
+            font-size: 14px;
+            color: var(--text-main);
+            position: relative;
+        }
+        .rank-sub b { color: var(--neon-cyan); font-weight: 700; }
+
+        .stats-card {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 35px;
+            backdrop-filter: blur(20px);
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 0;
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .stat-row:last-child { border-bottom: none; }
+        .stat-label {
+            color: var(--text-dim);
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .stat-value { font-size: 22px; font-weight: 700; }
+        .stat-value.id { color: var(--text-main); font-family: 'Inter', monospace; letter-spacing: 2px; }
+        .stat-value.dep { color: var(--neon-cyan); }
+        .stat-value.turn { color: var(--neon-purple); }
+
+        .neighbors-block {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            overflow: hidden;
+            backdrop-filter: blur(20px);
+        }
+        .neighbors-header {
+            padding: 25px;
+            text-align: center;
+            background: rgba(0,0,0,0.3);
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .neighbors-header h3 {
+            font-family: 'Orbitron', sans-serif;
+            color: var(--text-main);
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+        .neighbors-header p { color: var(--text-dim); font-size: 12px; }
+        .neighbor-row {
+            display: grid;
+            grid-template-columns: 90px 1fr 160px;
+            align-items: center;
+            padding: 18px 25px;
+            border-bottom: 1px solid var(--glass-border);
+            transition: all 0.3s;
+        }
+        .neighbor-row:last-child { border-bottom: none; }
+        .neighbor-row .n-rank {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            color: var(--text-dim);
+            font-size: 16px;
+        }
+        .neighbor-row .n-name-block { display: flex; flex-direction: column; gap: 3px; }
+        .neighbor-row .n-name { color: var(--text-main); font-weight: 600; font-size: 15px; }
+        .neighbor-row .n-id {
+            font-family: 'Inter', monospace;
+            color: var(--text-dim);
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+        .neighbor-row .n-dep {
+            text-align: right;
+            font-weight: 700;
+            color: var(--neon-cyan);
+            font-size: 16px;
+        }
+        .neighbor-row.current {
+            background: linear-gradient(90deg, rgba(0, 243, 255, 0.1), rgba(176, 38, 255, 0.05));
+            border-left: 4px solid var(--neon-cyan);
+            box-shadow: inset 0 0 20px rgba(0, 243, 255, 0.05);
+        }
+        .neighbor-row.current .n-rank { color: var(--neon-gold); font-size: 20px; }
+        .neighbor-row.current .n-name { color: var(--neon-gold); font-weight: 700; }
+        .neighbor-row.current .n-id { color: var(--neon-gold); }
+        .neighbor-row.current .n-dep { color: var(--neon-gold); }
+
+        /* ACTION BUTTONS */
+        .action-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 40px 0;
+        }
+        .action-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 16px 24px;
+            border-radius: 14px;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 1px solid var(--glass-border);
+            text-decoration: none;
+            color: white;
+            backdrop-filter: blur(10px);
+        }
+        .action-btn:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .action-btn.telegram { background: linear-gradient(135deg, #0088cc, #00a8e8); border-color: rgba(0, 136, 204, 0.3); }
+        .action-btn.telegram:hover { box-shadow: 0 10px 30px rgba(0, 136, 204, 0.4); }
+        .action-btn.rami { background: linear-gradient(135deg, var(--neon-purple), #8b5cf6); border-color: rgba(176, 38, 255, 0.3); }
+        .action-btn.rami:hover { box-shadow: 0 10px 30px rgba(176, 38, 255, 0.4); }
+        .action-btn.prizes { background: linear-gradient(135deg, var(--neon-gold), var(--neon-orange)); border-color: rgba(255, 215, 0, 0.3); color: #000; }
+        .action-btn.prizes:hover { box-shadow: 0 10px 30px rgba(255, 215, 0, 0.4); }
+        .action-btn.rules { background: linear-gradient(135deg, var(--neon-cyan), #0ea5e9); border-color: rgba(0, 243, 255, 0.3); color: #000; }
+        .action-btn.rules:hover { box-shadow: 0 10px 30px rgba(0, 243, 255, 0.4); }
+        .action-btn.share { background: linear-gradient(135deg, var(--neon-green), #10b981); border-color: rgba(0, 255, 136, 0.3); color: #000; }
+        .action-btn.share:hover { box-shadow: 0 10px 30px rgba(0, 255, 136, 0.4); }
+        .action-btn .btn-icon { font-size: 22px; }
+
+        /* MODALS */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(10px);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-overlay.active { display: flex !important; }
+        .modal {
+            background: linear-gradient(135deg, #121622, #0a0e1a);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+            animation: modalPop 0.3s ease;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        @keyframes modalPop {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .modal.error { border-color: rgba(255, 71, 87, 0.4); }
+        .modal h2 { font-family: 'Orbitron', sans-serif; margin-bottom: 15px; font-size: 22px; }
+        .modal.error h2 { color: #ff4757; }
+        .modal.success h2 {
+            background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .modal p { color: var(--text-dim); margin-bottom: 20px; line-height: 1.6; font-size: 14px; }
+        .modal-input {
+            width: 100%;
+            padding: 14px 20px;
+            font-size: 16px;
+            background: rgba(0,0,0,0.4);
+            border: 2px solid var(--glass-border);
+            border-radius: 12px;
+            color: white;
+            outline: none;
+            margin-bottom: 20px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        .modal-input:focus { border-color: var(--neon-cyan); }
+        .modal-input::placeholder { color: var(--text-dim); }
+        .screenshots { display: flex; gap: 12px; margin-bottom: 25px; justify-content: center; }
+        .screenshot-placeholder {
+            width: 110px; height: 150px;
+            background: rgba(255,255,255,0.03);
+            border: 2px dashed rgba(255,255,255,0.15);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; color: var(--text-dim); text-align: center; padding: 8px;
+        }
+        .modal-btn {
+            padding: 14px 36px;
+            background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            font-size: 14px;
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 1px;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+        .modal-btn:hover { transform: scale(1.05); box-shadow: 0 0 25px rgba(0, 243, 255, 0.4); }
+        .modal-btn.danger { background: linear-gradient(135deg, #ff4757, #ff6b81); }
+
+        .prize-list { text-align: left; margin: 20px 0; }
+        .prize-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border-left: 3px solid var(--neon-gold);
+        }
+        .prize-place { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--neon-gold); }
+        .prize-amount { font-weight: 700; color: var(--neon-cyan); font-size: 18px; }
+
+        .rules-list { text-align: left; margin: 20px 0; }
+        .rule-item {
+            display: flex;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .rule-item:last-child { border-bottom: none; }
+        .rule-number { font-family: 'Orbitron', sans-serif; font-weight: 700; color: var(--neon-purple); min-width: 30px; }
+        .rule-text { color: var(--text-main); font-size: 14px; line-height: 1.5; }
+
+        footer {
+            text-align: center;
+            padding: 40px 0;
+            color: var(--text-dim);
+            font-size: 12px;
+            border-top: 1px solid var(--glass-border);
+            margin-top: 40px;
+        }
+        .reset-link { color: var(--neon-purple); cursor: pointer; text-decoration: none; transition: color 0.3s; }
+        .reset-link:hover { color: var(--neon-cyan); }
+
+        @media (max-width: 768px) {
+            .top3-grid { grid-template-columns: 1fr; }
+            .top-card.first { transform: scale(1); order: 1; }
+            .top-card.second { order: 2; }
+            .top-card.third { order: 3; }
+            .search-btn { width: 100%; margin-top: 10px; }
+            .profile-grid { grid-template-columns: 1fr; }
+            .neighbor-row { grid-template-columns: 70px 1fr 100px; padding: 15px; }
+            .rank-value { font-size: 56px; }
+            .section-title { font-size: 24px; }
+            .countdown-value { font-size: 28px; }
+            .action-buttons { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div class="logo">⚡ PO TOURNAMENT</div>
+        <div class="prize-badge"> ПРИЗОВОЙ ФОНД: $5,000</div>
+    </header>
+
+    <div class="countdown-section">
+        <div class="countdown-label">⏰ До конца турнира осталось</div>
+        <div class="countdown-timer" id="countdown-timer">
+            <div class="countdown-item">
+                <div class="countdown-value" id="days">00</div>
+                <div class="countdown-unit">Дней</div>
+            </div>
+            <div class="countdown-item">
+                <div class="countdown-value" id="hours">00</div>
+                <div class="countdown-unit">Часов</div>
+            </div>
+            <div class="countdown-item">
+                <div class="countdown-value" id="minutes">00</div>
+                <div class="countdown-unit">Минут</div>
+            </div>
+            <div class="countdown-item">
+                <div class="countdown-value" id="seconds">00</div>
+                <div class="countdown-unit">Секунд</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="live-stats-bar">
+        <div class="live-stat">
+            <div class="live-stat-value"><span class="live-dot"></span><span id="total-players">14,502</span></div>
+            <div class="live-stat-label">Участников</div>
+        </div>
+        <div class="live-stat">
+            <div class="live-stat-value" style="color: var(--neon-purple);">$<span id="total-turnover">2.4M</span></div>
+            <div class="live-stat-label">Общий оборот</div>
+        </div>
+        <div class="live-stat">
+            <div class="live-stat-value" style="color: var(--neon-gold);">$<span id="total-prize">5,000</span></div>
+            <div class="live-stat-label">Призовой фонд</div>
+        </div>
+    </div>
+
+    <div class="activity-feed">
+        <div class="activity-header">
+            <div class="activity-title">
+                <span class="live-dot"></span>
+                ПОСЛЕДНИЕ ДЕЙСТВИЯ
+            </div>
+            <div style="font-size: 11px; color: var(--text-dim);">Обновляется в реальном времени</div>
+        </div>
+        <div class="activity-list" id="activity-list"></div>
+    </div>
+
+    <h2 class="section-title">🔥 ЭЛИТА СЕТИ: ТОП-10 ЛИДОВ СЕЗОНА</h2>
+    <div class="top3-grid" id="top3-grid"></div>
+    <div class="rest-top10" id="rest-top10"></div>
+
+    <div class="action-buttons">
+        <a href="https://t.me/your_channel" target="_blank" class="action-btn telegram">
+            <span class="btn-icon"></span>
+            Телеграм канал
+        </a>
+        <a href="https://t.me/rami_username" target="_blank" class="action-btn rami">
+            <span class="btn-icon">💬</span>
+            Написать Rami
+        </a>
+        <button class="action-btn prizes" onclick="showPrizesModal()">
+            <span class="btn-icon">🏆</span>
+            Призы
+        </button>
+        <button class="action-btn rules" onclick="showRulesModal()">
+            <span class="btn-icon">📋</span>
+            Правила турнира
+        </button>
+        <button class="action-btn share" onclick="shareResult()" id="share-btn" style="display: none;">
+            <span class="btn-icon">🔗</span>
+            Поделиться результатом
+        </button>
+    </div>
+
+    <div class="search-section">
+        <h2 class="section-title" style="margin-bottom: 15px;">НАЙДИ СЕБЯ В СИСТЕМЕ</h2>
+        <p class="search-subtitle">Введи свой уникальный ID от Pocket Option, чтобы узнать свой ранг, статистику и место в турнирной таблице.</p>
+        <div class="search-wrapper">
+            <input type="text" class="search-input" id="userIdInput" placeholder="Введите ваш ID...">
+            <button class="search-btn" onclick="searchUser()">ПОИСК</button>
+        </div>
+        <p class="hint">* ID в Pocket Option состоит из 9-10 цифр. Для теста введите любой 9-значный номер.</p>
+    </div>
+
+    <div id="result-section">
+        <div class="welcome-msg">Привет, <span id="user-name-display">Трейдер</span>! 👋</div>
+        <div class="profile-grid">
+            <div class="rank-card">
+                <div class="rank-label">Ваш порядковый номер</div>
+                <div class="rank-value" id="my-rank">#--</div>
+                <div class="rank-sub">Вы опередили <b id="beaten-count">0</b> трейдеров</div>
+            </div>
+            <div class="stats-card">
+                <div class="stat-row">
+                    <span class="stat-label">Ваш ID</span>
+                    <span class="stat-value id" id="my-id">---</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Сумма депов</span>
+                    <span class="stat-value dep" id="my-dep">$---</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Оборот (30 дней)</span>
+                    <span class="stat-value turn" id="my-turn">$---</span>
+                </div>
+            </div>
+        </div>
+        <div class="neighbors-block">
+            <div class="neighbors-header">
+                <h3>📊 ВАШЕ ОКРУЖЕНИЕ В РЕЙТИНГЕ</h3>
+                <p>Ближайшие соседи по таблице (остальные скрыты системой)</p>
+            </div>
+            <div id="neighbors-list"></div>
+        </div>
+    </div>
+
+    <footer>
+        <p>© 2024 PO Tournament. Закрытая лига.</p>
+        <p style="margin-top: 10px;">Для разработчика: <span class="reset-link" onclick="resetDemo()">Сбросить демо-данные</span></p>
+    </footer>
+</div>
+
+<!-- MODALS -->
+<div class="modal-overlay" id="regModal">
+    <div class="modal success">
+        <h2>👋 ДОБРО ПОЖАЛОВАТЬ!</h2>
+        <p>Ваш ID верен, но вы еще не участвовали в этом сезоне. Введите ваше имя (или никнейм), чтобы мы могли вас идентифицировать для розыгрышей.</p>
+        <input type="text" class="modal-input" id="regNameInput" placeholder="Ваше имя / Никнейм">
+        <button class="modal-btn" onclick="registerUser()">ЗАРЕГИСТРИРОВАТЬСЯ</button>
+    </div>
+</div>
+
+<div class="modal-overlay" id="errorModal">
+    <div class="modal error">
+        <h2>⚠️ ОШИБКА ФОРМАТА ID</h2>
+        <p>Введенный ID не похож на идентификатор Pocket Option. ID должен состоять из 9-10 цифр. Пожалуйста, проверьте данные в приложении.</p>
+        <div class="screenshots">
+            <div class="screenshot-placeholder">[ Скриншот 1: <br> Открыть профиль ]</div>
+            <div class="screenshot-placeholder">[ Скриншот 2: <br> Найти ID ]</div>
+            <div class="screenshot-placeholder">[ Скриншот 3: <br> Скопировать ]</div>
+        </div>
+        <button class="modal-btn danger" onclick="closeModal('errorModal')">ПОНЯТНО</button>
+    </div>
+</div>
+
+<div class="modal-overlay" id="prizesModal">
+    <div class="modal">
+        <h2 style="background: linear-gradient(90deg, var(--neon-gold), var(--neon-orange)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">🏆 ПРИЗОВОЙ ФОНД</h2>
+        <p>Топ-10 участников сезона получают денежные призы:</p>
+        <div class="prize-list">
+            <div class="prize-item"><span class="prize-place">🥇 1 место</span><span class="prize-amount">$1,500</span></div>
+            <div class="prize-item"><span class="prize-place">🥈 2 место</span><span class="prize-amount">$1,000</span></div>
+            <div class="prize-item"><span class="prize-place">🥉 3 место</span><span class="prize-amount">$700</span></div>
+            <div class="prize-item"><span class="prize-place">4 место</span><span class="prize-amount">$500</span></div>
+            <div class="prize-item"><span class="prize-place">5 место</span><span class="prize-amount">$400</span></div>
+            <div class="prize-item"><span class="prize-place">6-10 места</span><span class="prize-amount">$180 каждое</span></div>
+        </div>
+        <p style="font-size: 12px; color: var(--text-dim);">* Призы выплачиваются в течение 7 дней после окончания турнира</p>
+        <button class="modal-btn" onclick="closeModal('prizesModal')">ЗАКРЫТЬ</button>
+    </div>
+</div>
+
+<div class="modal-overlay" id="rulesModal">
+    <div class="modal">
+        <h2 style="background: linear-gradient(90deg, var(--neon-cyan), var(--neon-purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">📋 ПРАВИЛА ТУРНИРА</h2>
+        <div class="rules-list">
+            <div class="rule-item"><span class="rule-number">01</span><span class="rule-text">Турнир открыт для всех участников команды Pocket Option</span></div>
+            <div class="rule-item"><span class="rule-number">02</span><span class="rule-text">Рейтинг формируется по сумме депозитов за период турнира</span></div>
+            <div class="rule-item"><span class="rule-number">03</span><span class="rule-text">Оборот учитывается за последние 30 дней активности</span></div>
+            <div class="rule-item"><span class="rule-number">04</span><span class="rule-text">Топ-10 участников получают денежные призы (см. раздел "Призы")</span></div>
+            <div class="rule-item"><span class="rule-number">05</span><span class="rule-text">Результаты обновляются ежедневно в 00:00 UTC</span></div>
+            <div class="rule-item"><span class="rule-number">06</span><span class="rule-text">В случае споров решение организатора (Rami) является окончательным</span></div>
+        </div>
+        <button class="modal-btn" onclick="closeModal('rulesModal')">ПОНЯТНО</button>
+    </div>
+</div>
+
+<script>
+    const database = {};
+
+    const fakeTop10 = [
+        { rank: 1, name: "Ахмед", avatar: "", dep: 150000, turn: 4500000 },
+        { rank: 2, name: "Равшан", avatar: "", dep: 120000, turn: 3800000 },
+        { rank: 3, name: "Джамшут", avatar: "", dep: 95000, turn: 2900000 },
+        { rank: 4, name: "Тимур", avatar: "", dep: 82000, turn: 2400000 },
+        { rank: 5, name: "Азамат", avatar: "", dep: 74000, turn: 2100000 },
+        { rank: 6, name: "Руслан", avatar: "", dep: 65000, turn: 1800000 },
+        { rank: 7, name: "Бахтиёр", avatar: "", dep: 58000, turn: 1500000 },
+        { rank: 8, name: "Фарход", avatar: "", dep: 49000, turn: 1200000 },
+        { rank: 9, name: "Шерзод", avatar: "", dep: 42000, turn: 950000 },
+        { rank: 10, name: "Улугбек", avatar: "", dep: 35000, turn: 800000 }
+    ];
+
+    const randomNames = ["Александр", "Дмитрий", "Максим", "Сергей", "Андрей", "Алексей", "Артём", "Илья", "Кирилл", "Михаил", "Никита", "Матвей", "Роман", "Егор", "Арсений", "Иван", "Денис", "Евгений", "Тимофей", "Владислав"];
+
+    // Получить инициалы имени
+    function getInitials(name) {
+        return name.charAt(0).toUpperCase();
+    }
+
+    // Создать HTML аватара (эмодзи или инициалы)
+    function renderAvatar(avatar, name, place) {
+        if (avatar && avatar.trim() !== '') {
+            return `<div class="avatar-wrapper"><span class="bot-avatar">${avatar}</span></div>`;
+        } else {
+            return `<div class="avatar-wrapper"><div class="initials-avatar">${getInitials(name)}</div></div>`;
+        }
+    }
+
+    function updateCountdown() {
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + 14);
+        function tick() {
+            const now = new Date();
+            const diff = endDate - now;
+            if (diff <= 0) {
+                document.getElementById('days').innerText = '00';
+                document.getElementById('hours').innerText = '00';
+                document.getElementById('minutes').innerText = '00';
+                document.getElementById('seconds').innerText = '00';
+                return;
+            }
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            document.getElementById('days').innerText = String(days).padStart(2, '0');
+            document.getElementById('hours').innerText = String(hours).padStart(2, '0');
+            document.getElementById('minutes').innerText = String(minutes).padStart(2, '0');
+            document.getElementById('seconds').innerText = String(seconds).padStart(2, '0');
+        }
+        tick();
+        setInterval(tick, 1000);
+    }
+
+    function generateActivity() {
+        const activities = [
+            { name: "Александр", avatar: "", action: "поднялся на", rank: 42, time: "2 мин назад" },
+            { name: "Дмитрий", avatar: "", action: "пополнил депозит на", rank: null, time: "5 мин назад", extra: "$500" },
+            { name: "Максим", avatar: "", action: "вошёл в Топ-100", rank: 87, time: "12 мин назад" },
+            { name: "Сергей", avatar: "", action: "обогнал", rank: 156, time: "18 мин назад", extra: "12 трейдеров" },
+            { name: "Андрей", avatar: "", action: "достиг оборота", rank: null, time: "25 мин назад", extra: "$50,000" }
+        ];
+        const list = document.getElementById('activity-list');
+        list.innerHTML = '';
+        activities.forEach(act => {
+            let actionText = `<b>${act.name}</b> ${act.action} `;
+            if (act.rank) actionText += `<b>#${act.rank}</b> место`;
+            if (act.extra) actionText += `<b>${act.extra}</b>`;
+            list.innerHTML += `
+                <div class="activity-item">
+                    <span class="activity-avatar">${act.avatar || '👤'}</span>
+                    <span class="activity-text">${actionText}</span>
+                    <span class="activity-time">${act.time}</span>
+                </div>
+            `;
+        });
+    }
+
+    function renderTop10() {
+        const grid = document.getElementById('top3-grid');
+        const top3 = fakeTop10.slice(0, 3);
+        const ordered = [top3[1], top3[0], top3[2]];
+        const classes = ['second', 'first', 'third'];
+        const medals = ['🥈', '', '🥉'];
+        const rankTexts = ['2 МЕСТО', '1 МЕСТО', '3 МЕСТО'];
+
+        ordered.forEach((bot, index) => {
+            const crownHtml = index === 1 ? '<div class="crown">👑</div>' : '';
+            const avatarHtml = renderAvatar(bot.avatar, bot.name, index);
+            
+            grid.innerHTML += `
+                <div class="top-card ${classes[index]}">
+                    ${crownHtml}
+                    ${avatarHtml}
+                    <div class="bot-name">
+                        <span class="medal-badge">${medals[index]}</span>
+                        ${bot.name}
+                    </div>
+                    <div class="bot-rank">${rankTexts[index]}</div>
+                    <div class="bot-stats">
+                        <div class="stat-box">
+                            <div class="stat-label-small">Деп</div>
+                            <div class="stat-val">$${bot.dep.toLocaleString()}</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label-small">Оборот</div>
+                            <div class="stat-val">$${bot.turn.toLocaleString()}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        const restContainer = document.getElementById('rest-top10');
+        const rest = fakeTop10.slice(3);
+        rest.forEach(bot => {
+            const avatarHtml = bot.avatar ? `<span class="avatar-small">${bot.avatar}</span>` : '';
+            restContainer.innerHTML += `
+                <div class="mini-card">
+                    <div class="rank">${bot.rank}</div>
+                    <div class="info">
+                        <div class="name">${avatarHtml} ${bot.name}</div>
+                        <div class="id">ID: HIDDEN</div>
+                    </div>
+                    <div class="dep">$${bot.dep.toLocaleString()}</div>
+                </div>
+            `;
+        });
+    }
+
+    function searchUser() {
+        const input = document.getElementById('userIdInput').value.trim();
+        if (!/^\d{9,10}$/.test(input)) {
+            document.getElementById('errorModal').classList.add('active');
+            return;
+        }
+        if (database[input]) {
+            showResult(database[input], input);
+        } else {
+            showRegistrationModal();
+        }
+    }
+
+    function showRegistrationModal() {
+        const modal = document.getElementById('regModal');
+        modal.classList.add('active');
+        const input = document.getElementById('regNameInput');
+        input.value = '';
+        setTimeout(() => input.focus(), 100);
+    }
+
+    function registerUser() {
+        const name = document.getElementById('regNameInput').value.trim();
+        const id = document.getElementById('userIdInput').value.trim();
+        if (!name) { alert('Пожалуйста, введите имя!'); return; }
+
+        const fakeRank = Math.floor(Math.random() * 500) + 11;
+        const fakeDep = Math.floor(Math.random() * 10000) + 1000;
+        const fakeTurn = fakeDep * (Math.floor(Math.random() * 10) + 5);
+
+        const newUser = { name, rank: fakeRank, dep: fakeDep, turn: fakeTurn };
+        database[id] = newUser;
+
+        closeModal('regModal');
+        showResult(newUser, id);
+    }
+
+    function showResult(user, id) {
+        document.getElementById('result-section').style.display = 'block';
+        document.getElementById('user-name-display').innerText = user.name;
+        document.getElementById('my-rank').innerText = `#${user.rank}`;
+        document.getElementById('my-id').innerText = id;
+        document.getElementById('my-dep').innerText = `$${user.dep.toLocaleString()}`;
+        document.getElementById('my-turn').innerText = `$${user.turn.toLocaleString()}`;
+        document.getElementById('beaten-count').innerText = (14502 - user.rank).toLocaleString();
+        generateNeighbors(user.rank, user.dep, id, user.name);
+        document.getElementById('share-btn').style.display = 'flex';
+        document.getElementById('result-section').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function generateNeighbors(userRank, userDep, userId, userName) {
+        const list = document.getElementById('neighbors-list');
+        list.innerHTML = '';
+        const neighbors = [
+            { rank: userRank - 2, dep: userDep + 250, name: randomNames[Math.floor(Math.random() * randomNames.length)], isUser: false },
+            { rank: userRank - 1, dep: userDep + 100, name: randomNames[Math.floor(Math.random() * randomNames.length)], isUser: false },
+            { rank: userRank, dep: userDep, id: userId, name: userName, isUser: true },
+            { rank: userRank + 1, dep: userDep - 100, name: randomNames[Math.floor(Math.random() * randomNames.length)], isUser: false },
+            { rank: userRank + 2, dep: userDep - 250, name: randomNames[Math.floor(Math.random() * randomNames.length)], isUser: false }
+        ];
+        neighbors.forEach(n => {
+            const fakeId = n.isUser ? userId : `PO${Math.floor(Math.random() * 90000000 + 10000000)}`;
+            const rowClass = n.isUser ? 'neighbor-row current' : 'neighbor-row';
+            const nameText = n.isUser ? `${n.name} (ВЫ)` : n.name;
+            list.innerHTML += `
+                <div class="${rowClass}">
+                    <div class="n-rank">#${n.rank}</div>
+                    <div class="n-name-block">
+                        <div class="n-name">${nameText}</div>
+                        <div class="n-id">${fakeId}</div>
+                    </div>
+                    <div class="n-dep">$${n.dep.toLocaleString()}</div>
+                </div>
+            `;
+        });
+    }
+
+    function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+    function showPrizesModal() { document.getElementById('prizesModal').classList.add('active'); }
+    function showRulesModal() { document.getElementById('rulesModal').classList.add('active'); }
+
+    function shareResult() {
+        const name = document.getElementById('user-name-display').innerText;
+        const rank = document.getElementById('my-rank').innerText;
+        const dep = document.getElementById('my-dep').innerText;
+        const text = `🔥 Я участвую в PO Tournament! Моё место: ${rank}, Депозит: ${dep}. Присоединяйся!`;
+        if (navigator.share) {
+            navigator.share({ title: 'PO Tournament', text: text, url: window.location.href }).catch(() => {});
+        } else {
+            navigator.clipboard.writeText(text + ' ' + window.location.href).then(() => {
+                alert('Результат скопирован в буфер обмена!');
+            }).catch(() => {
+                alert('Скопируйте ссылку вручную: ' + window.location.href);
+            });
+        }
+    }
+
+    function resetDemo() {
+        if(confirm('Сбросить все данные турнира?')) {
+            for (let key in database) delete database[key];
+            document.getElementById('result-section').style.display = 'none';
+            document.getElementById('userIdInput').value = '';
+            document.getElementById('share-btn').style.display = 'none';
+        }
+    }
+
+    document.getElementById('regNameInput').addEventListener('keypress', e => { if (e.key === 'Enter') registerUser(); });
+    document.getElementById('userIdInput').addEventListener('keypress', e => { if (e.key === 'Enter') searchUser(); });
+
+    renderTop10();
+    updateCountdown();
+    generateActivity();
+</script>
+
+</body>
+</html>

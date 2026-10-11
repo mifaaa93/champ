@@ -162,6 +162,39 @@ input[type="checkbox"] { width: 18px; height: 18px; padding: 0; }
   cursor: help;
   border-bottom: 1px dotted rgba(224, 180, 90, 0.45);
 }
+.lookup-bar {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.lookup-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.lookup-row input { flex: 1; min-width: 180px; }
+.modal-back {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 6, 10, 0.72);
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+.modal {
+  width: min(560px, 100%);
+  max-height: min(86vh, 720px);
+  overflow: auto;
+  position: relative;
+}
+.modal-x {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 28px;
+  cursor: pointer;
+  line-height: 1;
+}
 .hint-pop {
   position: absolute;
   left: 0;

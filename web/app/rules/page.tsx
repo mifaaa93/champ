@@ -1,3 +1,4 @@
+import { Nav } from "@/components/Nav";
 import { api } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,8 @@ export default async function RulesPage() {
     /* defaults */
   }
   return (
+    <>
+    <Nav />
     <main className="wrap">
       <div className="kicker">RULES</div>
       <h1>Как считается день</h1>
@@ -49,5 +52,6 @@ export default async function RulesPage() {
         </article>
       </div>
     </main>
+    </>
   );
 }

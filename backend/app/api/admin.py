@@ -8,7 +8,8 @@ from app.config import settings
 from app.db import get_session
 from app.models import DayLedger, Participant, Snapshot
 from app.ratelimit import client_ip, limiter
-from app.schemas import ProfilePatch, SettingsPatch, day_cash, dec
+from app.schemas import ProfilePatch, SettingsPatch, ShowcaseIn, day_cash, dec
+from app.services.event import list_showcase, save_showcase
 from app.services.freeze import freeze_day
 from app.services.poll import refresh_statistics, snapshot_watchlist
 from app.settings_service import get_settings, update_settings
@@ -39,6 +40,19 @@ async def patch_settings(
 ) -> dict:
     patch = body.model_dump(exclude_none=True)
     return await update_settings(session, patch)
+
+
+@router.get("/showcase", dependencies=[Depends(require_admin)])
+async def get_showcase(session: AsyncSession = Depends(get_session)) -> dict:
+    return {"rows": await list_showcase(session)}
+
+
+@router.put("/showcase", dependencies=[Depends(require_admin)])
+async def put_showcase(
+    body: ShowcaseIn, session: AsyncSession = Depends(get_session)
+) -> dict:
+    rows = await save_showcase(session, body.rows)
+    return {"rows": rows}
 
 
 @router.post("/snapshot", dependencies=[Depends(require_admin)])

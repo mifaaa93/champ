@@ -69,6 +69,51 @@ def test_winner_exclusion_and_ineligible():
     assert winners["loss"][0]["prize_amount"] == Decimal("70") * Decimal("15") / Decimal("100")
 
 
+def test_negatives_never_win_yield():
+    rows = [row(1, -100, -100), row(2, -50, -50), row(3, 10, 10)]
+    winners = pick_winners(rows, 3, [100, 50, 25], [15, 10, 5], Decimal("500"))
+    assert [w["uid"] for w in winners["yield"]] == [3]
+    assert [w["uid"] for w in winners["loss"]] == [1, 2]
+
+
+def test_yield_gap_to_first_and_top():
+    from app.services.ranking import yield_target
+
+    first = row(1, 20, 20)
+    seventh = row(7, 5, 5)
+    me = row(9, 2, 2)
+    pool = [first] + [row(i, 10 - i, 10 - i) for i in range(2, 8)] + [me]
+    # rebuild clean pool of 8
+    pool = [
+        row(1, 20, 20),
+        row(2, 15, 15),
+        row(3, 12, 12),
+        row(4, 10, 10),
+        row(5, 8, 8),
+        row(6, 6, 6),
+        row(7, 5, 5),
+        me,
+    ]
+    g7 = yield_target(me, pool, 7)
+    assert g7["already"] is False
+    assert g7["need_pct"] > 0
+    g1 = yield_target(me, pool, 1)
+    assert g1["need_pnl"] > g7["need_pnl"]
+    assert yield_target(first, pool, 1)["already"] is True
+
+
+def test_loss_gap_counts_extra_drawdown():
+    from app.services.ranking import loss_target
+
+    deep = row(1, -50, -50)
+    me = row(2, -5, -5)
+    pool = [deep, me]
+    g = loss_target(me, pool, 1)
+    assert g["already"] is False
+    assert g["need_pnl"] > 0
+    assert loss_target(deep, pool, 1)["already"] is True
+
+
 def test_no_loss_winners_when_all_green():
     rows = [row(1, 10, 10), row(2, 8, 8)]
     winners = pick_winners(rows, 3, [1, 1, 1], [15, 10, 5], Decimal("500"))

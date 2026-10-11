@@ -11,7 +11,7 @@ from app.models import DayResult, PublishLog
 from app.ledger import money
 from app.services.freeze import freeze_day, load_rank_rows
 from app.services.poll import refresh_statistics, snapshot_watchlist
-from app.services.ranking import eligible_only, pick_winners, sort_loss, sort_yield
+from app.services.ranking import loss_pool, pick_winners, yield_pool
 from app.settings_service import get_settings, job_get, job_set
 from app.telegram import (
     TelegramHtmlError,
@@ -54,14 +54,14 @@ async def telegram_board(session, day=None) -> dict:
     cfg = await get_settings(session)
     now = now_dubai()
     day = day or dubai_today()
-    rows = eligible_only(await load_rank_rows(session, day))
+    rows = await load_rank_rows(session, day)
     top_n = int(cfg["top_n"])
     min_pct = float(cfg.get("min_return_pct") or 0)
-    y_all = sort_yield(rows)
+    y_all = yield_pool(rows)
     if min_pct > 0:
         y_all = [r for r in y_all if float(r.return_pct) >= min_pct]
     y = y_all[:top_n]
-    loss = [r for r in sort_loss(rows) if r.trading_pnl < 0][:top_n]
+    loss = loss_pool(rows)[:top_n]
     winners = {"yield": [], "loss": []}
     frozen = list(
         (await session.execute(select(DayResult).where(DayResult.day == day))).scalars()
@@ -117,14 +117,14 @@ async def compose_hourly(session, day=None) -> str:
     cfg = await get_settings(session)
     now = now_dubai()
     day = day or dubai_today()
-    rows = eligible_only(await load_rank_rows(session, day))
+    rows = await load_rank_rows(session, day)
     top_n = int(cfg["top_n"])
     min_pct = float(cfg.get("min_return_pct") or 0)
-    y_all = sort_yield(rows)
+    y_all = yield_pool(rows)
     if min_pct > 0:
         y_all = [r for r in y_all if float(r.return_pct) >= min_pct]
     y = y_all[:top_n]
-    loss = [r for r in sort_loss(rows) if r.trading_pnl < 0][:top_n]
+    loss = loss_pool(rows)[:top_n]
     return build_hourly_message(
         str(day), now.strftime("%H:%M"), _pack(y), _pack(loss, loss=True), cfg
     )
