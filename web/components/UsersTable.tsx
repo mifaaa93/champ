@@ -10,6 +10,7 @@ export type ParticipantRow = {
   created_at: string | null;
   last_checked_at: string | null;
   eligible: boolean;
+  registered?: boolean;
   dq_reason: string;
   balance: number | null;
   pnl: number | null;
@@ -77,7 +78,7 @@ export function UsersTable({
   onDelete?: (uid: number) => Promise<void>;
 }) {
   const [q, setQ] = useState("");
-  const [scope, setScope] = useState<"all" | "in" | "out">("all");
+  const [scope, setScope] = useState<"all" | "in" | "out" | "named">("all");
   const [sortKey, setSortKey] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<-1 | 1>(-1);
   const [page, setPage] = useState(1);
@@ -87,6 +88,7 @@ export function UsersTable({
     return users.filter((u) => {
       if (scope === "in" && !u.eligible) return false;
       if (scope === "out" && u.eligible) return false;
+      if (scope === "named" && !(u.registered ?? Boolean((u.nickname || "").trim()))) return false;
       if (!needle) return true;
       const blob = `${u.uid} ${u.nickname} ${u.telegram} ${u.country} ${u.dq_reason}`.toLowerCase();
       return blob.includes(needle);
@@ -123,7 +125,7 @@ export function UsersTable({
         <div>
           <h1 className="page-title">Участники</h1>
           <div className="page-subtitle">
-            Все UID с возможностью редактирования · {filtered.length}/{users.length} · {day || "—"}
+            Имя сохраняется после ввода UID на сайте · {filtered.length}/{users.length} · {day || "—"}
           </div>
         </div>
       </div>
@@ -140,11 +142,12 @@ export function UsersTable({
           <select
             value={scope}
             onChange={(e) => {
-              setScope(e.target.value as "all" | "in" | "out");
+              setScope(e.target.value as "all" | "in" | "out" | "named");
               setPage(1);
             }}
           >
             <option value="all">Все статусы</option>
+            <option value="named">Зарегистрировались</option>
             <option value="in">В зачёте</option>
             <option value="out">Не в зачёте</option>
           </select>
@@ -190,7 +193,12 @@ export function UsersTable({
                     <td className="uid-cell">
                       <a href={`/trader/${u.uid}?from=admin`}>{u.uid}</a>
                     </td>
-                    <td className="name-cell">{u.nickname || "—"}</td>
+                    <td className="name-cell">
+                      {u.nickname || "—"}
+                      {(u.registered ?? Boolean((u.nickname || "").trim())) ? (
+                        <div className="note-dim">на сайте</div>
+                      ) : null}
+                    </td>
                     <td>{u.telegram ? `@${u.telegram}` : "—"}</td>
                     <td>{u.country || "—"}</td>
                     <td>{dubaiWhen(u.created_at)}</td>

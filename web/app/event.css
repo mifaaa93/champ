@@ -126,17 +126,47 @@ html.po-root body {
 @keyframes bgPulse { 0% { opacity: 0.7; } 100% { opacity: 1; } }
 
 .po-header {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 25px 0; margin-bottom: 30px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 15px;
+  padding: 25px 0;
+  margin-bottom: 30px;
   border-bottom: 1px solid var(--glass-border);
-  flex-wrap: wrap; gap: 15px;
 }
+.po-header .logo { justify-self: start; }
+.po-header .prize-badge { justify-self: end; }
 .logo {
   font-family: Orbitron, sans-serif;
   font-size: 26px; font-weight: 900;
   background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   letter-spacing: 2px;
+}
+.join-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.join-btn {
+  font-family: Orbitron, sans-serif;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 14px 32px;
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  color: #041018;
+  background: linear-gradient(135deg, var(--neon-green), var(--neon-cyan));
+  box-shadow: 0 0 28px rgba(0, 255, 136, 0.35);
+}
+.join-btn:hover { filter: brightness(1.08); }
+.join-hello {
+  font-size: 13px;
+  color: var(--neon-green);
+  font-weight: 700;
 }
 .prize-badge {
   background: linear-gradient(135deg, var(--neon-gold), var(--neon-orange));
@@ -435,6 +465,9 @@ html.po-root body {
 }
 
 @media (max-width: 768px) {
+  .po-header { grid-template-columns: 1fr; justify-items: center; }
+  .po-header .logo, .po-header .prize-badge { justify-self: center; }
+  .join-btn { width: 100%; }
   .top3-grid { grid-template-columns: 1fr; }
   .top-card.first { transform: scale(1); order: 1; }
   .top-card.second { order: 2; }

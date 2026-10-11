@@ -157,6 +157,7 @@ async def list_participants(session: AsyncSession = Depends(get_session)) -> dic
             {
                 "uid": p.uid,
                 "nickname": p.nickname or "",
+                "registered": bool((p.nickname or "").strip()),
                 "telegram": p.telegram or "",
                 "country": p.country or "",
                 "created_at": p.created_at.isoformat() if p.created_at else None,

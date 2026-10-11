@@ -199,6 +199,20 @@ export function EventHome() {
   }, [load]);
 
   useEffect(() => {
+    let saved = "";
+    try {
+      saved = window.localStorage.getItem("po_champ_uid") || "";
+    } catch {
+      saved = "";
+    }
+    if (!/^\d{9,10}$/.test(saved)) return;
+    setUid(saved);
+    void searchUid(saved, false);
+    // Restore the saved name once, when the visitor comes back.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     if (!refUid || refUid.length < 9) return;
     void fetch(apiPath(`/public/event/invite/${refUid}`), { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
@@ -250,17 +264,27 @@ export function EventHome() {
     ? `Я в чемпионате! Моё место ${activeBoard === "B" ? "по потерям" : "по доходности"}: ${profile.in_ranking === false || shareRank === 0 ? "пока вне этого топа" : `#${shareRank}`}, депозит: ${money(profile.dep)}. Сможешь обогнать?`
     : "";
 
-  async function applyProfile(you: Profile, status?: string) {
+  function rememberUid(value: string | number) {
+    try {
+      window.localStorage.setItem("po_champ_uid", String(value));
+    } catch {
+      /* private mode */
+    }
+  }
+
+  async function applyProfile(you: Profile, status?: string, scroll = true) {
     setProfile(you);
+    rememberUid(you.uid);
     setModal(status === "need_deposit" ? "need_deposit" : null);
     void load().catch(() => {});
+    if (!scroll) return;
     requestAnimationFrame(() => {
       document.getElementById("result-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   }
 
-  async function search() {
-    const raw = uid.trim();
+  async function searchUid(rawInput: string, scroll = true) {
+    const raw = rawInput.trim();
     setLookupErr("");
     if (!/^\d{9,10}$/.test(raw)) {
       setModal("format");
@@ -290,7 +314,7 @@ export function EventHome() {
       }
       const you = (body as { you?: Profile }).you;
       if ((st === "ok" || st === "need_deposit") && you) {
-        await applyProfile(you, st);
+        await applyProfile(you, st, scroll);
         return;
       }
       setLookupErr("Не удалось найти результат. Попробуй ещё раз.");
@@ -298,6 +322,18 @@ export function EventHome() {
       setLookupErr("Проверка временно недоступна. Попробуй ещё раз.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  function search() {
+    return searchUid(uid, true);
+  }
+
+  function goJoin() {
+    const target = profile ? "result-section" : "join";
+    document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (!profile) {
+      window.setTimeout(() => document.getElementById("join-uid")?.focus(), 450);
     }
   }
 
@@ -323,7 +359,10 @@ export function EventHome() {
       }
       const you = (body as { you?: Profile }).you;
       const st = (body as { status?: string }).status;
-      if (you) await applyProfile(you, st);
+      if (you) {
+        rememberUid(uid.trim());
+        await applyProfile(you, st);
+      }
     } catch {
       setLookupErr("Не удалось сохранить имя. Попробуй ещё раз.");
       setModal(null);
@@ -399,6 +438,12 @@ export function EventHome() {
       <div className="container">
         <header className="po-header">
           <div className="logo">⚡ {data?.name || "PO CHAMPIONSHIP"}</div>
+          <div className="join-wrap">
+            <button type="button" className="join-btn" onClick={goJoin}>
+              Участвовать
+            </button>
+            {profile?.name ? <div className="join-hello">Привет, {profile.name}</div> : null}
+          </div>
           <div className="prize-badge">ПРИЗОВОЙ ПУЛ: {money(data?.prize_pool || 0)}</div>
         </header>
 
@@ -578,7 +623,7 @@ export function EventHome() {
           ) : null}
         </div>
 
-        <div className="search-section">
+        <div className="search-section" id="join">
           <h2 className="section-title" style={{ marginBottom: 15, fontSize: 24 }}>
             НАЙДИ СЕБЯ В РЕЙТИНГЕ
           </h2>
@@ -594,6 +639,7 @@ export function EventHome() {
             }}
           >
             <input
+              id="join-uid"
               className="search-input"
               value={uid}
               onChange={(e) => setUid(e.target.value.replace(/\D/g, "").slice(0, 10))}
