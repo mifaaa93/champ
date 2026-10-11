@@ -56,6 +56,7 @@ def test_event_register_uid_must_be_9_or_10_digits():
         EventRegisterIn(uid=12345678, nickname="Rami")
     ok = EventRegisterIn(uid=123456789, nickname="Rami", telegram="https://t.me/rami_user")
     assert ok.telegram == "rami_user"
+    assert EventRegisterIn(uid=123456789, nickname="Rami").telegram == ""
 
 
 def test_merge_puts_real_above_dummy_when_dep_higher():

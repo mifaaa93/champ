@@ -149,10 +149,7 @@ class EventRegisterIn(BaseModel):
     @field_validator("telegram")
     @classmethod
     def clean_tg(cls, value: str) -> str:
-        value = normalize_telegram(value)
-        if not value:
-            raise ValueError("Введи Telegram: ссылка, @username или username")
-        return value
+        return normalize_telegram(value)
 
 
 class ShowcaseIn(BaseModel):

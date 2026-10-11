@@ -1003,8 +1003,6 @@ async def lookup_event_uid(session: AsyncSession, uid: int) -> dict:
     ).scalar_one_or_none()
     if not part or not (part.nickname or "").strip():
         return {"uid": uid, "status": "need_name"}
-    if not (part.telegram or "").strip():
-        return {"uid": uid, "status": "need_telegram", "name": part.nickname.strip()}
 
     try:
         from app.services.poll import snapshot_uid
