@@ -140,6 +140,27 @@ def test_reals_below_min_stay_off_merged_board():
     assert [r["name"] for r in board] == ["Ахмед", "Ок"]
 
 
+def test_deposit_activity_keeps_amount_out_of_the_place():
+    from app.services.event import _format_activity
+
+    rows = _format_activity(
+        [
+            {
+                "name": "Руслан",
+                "action": "пополнил депозит на",
+                "extra": "$9 249",
+                "rank": 7,
+                "scope": "B",
+                "ts": 100,
+            }
+        ],
+        100,
+    )
+    assert rows[0]["rank"] is None
+    assert rows[0]["extra"] == "$9 249"
+    assert rows[0]["scope"] == "B"
+
+
 def test_dummy_live_events_on_name_and_dep():
     old = merge_board(
         [{"place": 1, "name": "Ахмед", "dep": 1000, "turn": 0}, {"place": 2, "name": "Тимур", "dep": 800, "turn": 0}],
@@ -151,7 +172,9 @@ def test_dummy_live_events_on_name_and_dep():
     )
     events = dummy_live_events(old, new)
     assert any(e["action"] == "занял место" and e["name"] == "Нурлан" for e in events)
-    assert any(e["action"] == "пополнил депозит на" and e["name"] == "Тимур" for e in events)
+    deposit = next(e for e in events if e["action"] == "пополнил депозит на" and e["name"] == "Тимур")
+    assert deposit["rank"] is None
+    assert deposit["extra"].startswith("$")
 
 
 def test_nudge_stays_at_least_fifty():

@@ -111,6 +111,14 @@ function activityLine(act: Activity) {
       </>
     );
   }
+  if (act.action === "пополнил депозит на") {
+    return (
+      <>
+        <b>{act.name}</b> пополнил депозит на {act.extra ? <b>{act.extra}</b> : null}
+        {scope}
+      </>
+    );
+  }
   return (
     <>
       <b>{act.name}</b> {act.action}{" "}

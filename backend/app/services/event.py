@@ -399,7 +399,7 @@ def dummy_live_events(old: list[dict], new: list[dict]) -> list[dict]:
                     "name": row["name"],
                     "action": "пополнил депозит на",
                     "extra": f"${int(round(delta)):,}".replace(",", " "),
-                    "rank": row["rank"],
+                    "rank": None,
                 }
             )
     return events[:3]
@@ -886,12 +886,14 @@ def _format_activity(live: list[dict], now: float) -> list[dict]:
         if not name or not action:
             continue
         scope = row.get("scope") if row.get("scope") in ("A", "B") else ""
+        # Place must not sit inside «пополнил депозит на $…».
+        rank = None if action == "пополнил депозит на" else row.get("rank")
         out.append(
             {
                 "name": name,
                 "action": action,
                 "extra": row.get("extra") or "",
-                "rank": row.get("rank"),
+                "rank": rank,
                 "scope": scope,
                 "time": activity_time_label(float(row.get("ts") or now), now),
             }
