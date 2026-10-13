@@ -17,6 +17,7 @@ type Settings = {
   top_n: number;
   min_day_deposit: number;
   publish_interval_minutes: number;
+  top_visible: number;
   min_return_pct: number;
   prize_yield: number[];
   prize_loss_pct: number[];
@@ -72,6 +73,7 @@ type Tab =
   | "top"
   | "prizes"
   | "params"
+  | "statistics"
   | "day"
   | "telegram"
   | "archive";
@@ -82,6 +84,7 @@ const empty: Settings = {
   top_n: 7,
   min_day_deposit: 50,
   publish_interval_minutes: 60,
+  top_visible: 10,
   min_return_pct: 0,
   prize_yield: [100, 50, 25],
   prize_loss_pct: [15, 10, 5],
@@ -113,6 +116,7 @@ const NAV: { id: Tab; icon: string; label: string; group: string }[] = [
   { id: "top", icon: "✏️", label: "Редактор Топ-10", group: "Основное" },
   { id: "prizes", icon: "💰", label: "Призы ($)", group: "Настройки" },
   { id: "params", icon: "⚙️", label: "Параметры", group: "Настройки" },
+  { id: "statistics", icon: "📈", label: "Статистика", group: "Настройки" },
   { id: "day", icon: "⏱️", label: "День", group: "Управление" },
   { id: "telegram", icon: "📱", label: "Telegram", group: "Управление" },
   { id: "archive", icon: "📁", label: "Архив", group: "Аналитика" },
@@ -148,6 +152,12 @@ export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("dashboard");
   const [event, setEvent] = useState<PublicEvent | null>(null);
   const [botToken, setBotToken] = useState("");
+  const [statistics, setStatistics] = useState<{
+    mode: string;
+    real: { players: number; deposits: number; turnover: number };
+    display: { players: number; deposits: number; turnover: number };
+  } | null>(null);
+  const [statsDraft, setStatsDraft] = useState({ players: 0, deposits: 0, turnover: 0 });
 
   useEffect(() => {
     if (!status) return;
@@ -182,7 +192,7 @@ export default function AdminPage() {
   }
 
   const places = useMemo(() => {
-    const n = Math.min(10, Math.max(1, Number(form.prize_places) || 1));
+    const n = Math.min(20, Math.max(1, Number(form.prize_places) || 1));
     return Array.from({ length: n }, (_, i) => i);
   }, [form.prize_places]);
 
@@ -254,6 +264,9 @@ export default function AdminPage() {
       };
       setUsers(plist.rows || []);
       setUsersDay(plist.day || "");
+      const stats = (await adminFetch("/admin/statistics", "GET", undefined, tok)) as NonNullable<typeof statistics>;
+      setStatistics(stats);
+      setStatsDraft(stats.display);
       await loadTg(tok, true);
       await loadEvent();
       setStatus("Настройки загружены");
@@ -268,6 +281,7 @@ export default function AdminPage() {
   function validate(): boolean {
     const next: Record<string, string> = {};
     if (!(form.top_n >= 1 && form.top_n <= 50)) next.top_n = "Топ: 1–50";
+    if (!(form.top_visible >= 3 && form.top_visible <= 80)) next.top_visible = "Список: 3–80";
     if (!(form.min_day_deposit >= 1 && form.min_day_deposit <= 1_000_000)) {
       next.min_day_deposit = "Мин. депозит от 1 до 1 000 000";
     }
@@ -277,7 +291,7 @@ export default function AdminPage() {
     if (!(form.min_return_pct >= 0 && form.min_return_pct <= 10000)) {
       next.min_return_pct = "Порог доходности 0–10000";
     }
-    if (!(form.prize_places >= 1 && form.prize_places <= 10)) next.prize_places = "Мест: 1–10";
+    if (!(form.prize_places >= 1 && form.prize_places <= 20)) next.prize_places = "Мест: 1–20";
     if (!(form.loss_comp_cap >= 0 && form.loss_comp_cap <= 1_000_000)) {
       next.loss_comp_cap = "Кап 0–1 000 000";
     }
@@ -295,7 +309,7 @@ export default function AdminPage() {
     setForm((prev) => {
       const next = { ...prev, [key]: value };
       if (key === "prize_places") {
-        const n = Math.min(10, Math.max(1, Number(value) || 1));
+        const n = Math.min(20, Math.max(1, Number(value) || 1));
         next.prize_places = n;
         next.prize_yield = Array.from({ length: n }, (_, i) => Number(prev.prize_yield[i] ?? 0));
         next.prize_loss_pct = Array.from({ length: n }, (_, i) => Number(prev.prize_loss_pct[i] ?? 0));
@@ -312,6 +326,7 @@ export default function AdminPage() {
     try {
       const saved = (await adminFetch("/admin/settings", "PATCH", {
         top_n: Number(form.top_n),
+        top_visible: Number(form.top_visible),
         min_day_deposit: Number(form.min_day_deposit),
         publish_interval_minutes: Number(form.publish_interval_minutes),
         prize_places: Number(form.prize_places),
@@ -697,6 +712,39 @@ export default function AdminPage() {
               section={tab === "top" ? "top" : tab === "prizes" ? "prizes" : "params"}
             />
           ) : null}
+        </section>
+
+        <section className={`section ${tab === "statistics" ? "active" : ""}`}>
+          <div className="page-header"><div><h1 className="page-title">Статистика чемпионата</h1>
+            <p className="page-subtitle">Реальный подсчёт или заданная стартовая точка с дальнейшим прибавлением изменений</p></div></div>
+          {statistics && <div className="card">
+            <p>Реальные значения: {statistics.real.players} участников · {money(statistics.real.deposits)} депозитов · {money(statistics.real.turnover)} оборот</p>
+            <div className="form-row">
+              {(["players", "deposits", "turnover"] as const).map((key) => (
+                <div className="form-group" key={key}>
+                  <label className="form-label">{({ players: "Участники", deposits: "Депозиты $", turnover: "Оборот $" })[key]}</label>
+                  <input className="form-input" type="number" min={0} value={statsDraft[key]}
+                    onChange={(e) => setStatsDraft({ ...statsDraft, [key]: Number(e.target.value) })} />
+                </div>
+              ))}
+            </div>
+            <div className="header-actions">
+              {(["real", "editable"] as const).map((mode) => (
+                <button type="button" className={`btn ${statistics.mode === mode ? "btn-primary" : "btn-ghost"}`} key={mode}
+                  onClick={async () => {
+                    try {
+                      const saved = (await adminFetch("/admin/statistics", "PATCH", { mode, ...statsDraft })) as NonNullable<typeof statistics> & { settings_version: number };
+                      setStatistics(saved); setStatsDraft(saved.display);
+                      setForm((prev) => ({ ...prev, settings_version: saved.settings_version }));
+                      await loadEvent();
+                      setStatus("Режим статистики сохранён");
+                    } catch (e) { setErr(e instanceof Error ? e.message : "Ошибка"); }
+                  }}>
+                  {mode === "real" ? "Реальная статистика" : "Редактируемая статистика"}
+                </button>
+              ))}
+            </div>
+          </div>}
         </section>
 
         <section className={`section ${tab === "day" ? "active" : ""}`}>

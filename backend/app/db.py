@@ -24,6 +24,7 @@ async def init_db() -> None:
             "ALTER TABLE showcase_leads ADD COLUMN IF NOT EXISTS pnl NUMERIC(18, 4) NOT NULL DEFAULT 0",
             "ALTER TABLE showcase_leads ADD COLUMN IF NOT EXISTS return_pct NUMERIC(18, 6) NOT NULL DEFAULT 0",
             "ALTER TABLE showcase_leads ADD COLUMN IF NOT EXISTS board VARCHAR(1) NOT NULL DEFAULT 'A'",
+            "ALTER TABLE showcase_leads ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT FALSE",
             "ALTER TABLE day_results ADD COLUMN IF NOT EXISTS card JSONB",
         ):
             await conn.execute(text(stmt))

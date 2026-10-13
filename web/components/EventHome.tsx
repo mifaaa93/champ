@@ -9,6 +9,7 @@ import "@/app/event.css";
 type PrizeRow = { place: string; amount: number; suffix?: string };
 type TopRow = {
   place: number;
+  uid?: number | null;
   name: string;
   dep: number;
   turn: number;
@@ -427,7 +428,9 @@ export function EventHome() {
         <div className="avatar-wrapper">
           <div className="initials-avatar">{row.name.charAt(0).toUpperCase()}</div>
         </div>
-        <div className="bot-name">{row.name}</div>
+        <div className="bot-name">
+          {row.uid ? <a href={`/trader/${row.uid}`}>{row.name} · UID {row.uid}</a> : row.name}
+        </div>
         <div className="bot-rank">{rankText}</div>
         <div className="bot-stats">
           <div className="stat-box">
@@ -585,7 +588,9 @@ export function EventHome() {
             <div className="table-row" key={`${activeBoard}-${row.place}`}>
               <div className="row-rank">{row.place}</div>
               <div>
-                <div className="row-name">{row.name}</div>
+                <div className="row-name">
+                  {row.uid ? <a href={`/trader/${row.uid}`}>{row.name} · UID {row.uid}</a> : row.name}
+                </div>
                 <div className="row-id">{row.dummy === false ? "LIVE" : "ID: HIDDEN"}</div>
               </div>
               <div className={`row-val ${activeBoard === "B" ? "loss" : (row.return_pct || 0) >= 0 ? "profit" : "loss"}`}>
@@ -678,7 +683,7 @@ export function EventHome() {
               inputMode="numeric"
             />
             <button type="submit" className="search-btn" disabled={busy}>
-              {busy ? "ПРОВЕРЯЕМ…" : "ПОИСК"}
+              {busy ? "ПРОВЕРЯЕМ…" : "УЧАСТВОВАТЬ"}
             </button>
           </form>
           <p className="hint">* UID в Pocket Option состоит из 9–10 цифр.</p>

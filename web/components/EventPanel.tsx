@@ -15,6 +15,22 @@ type ShowcaseRow = {
   return_pct: number;
   uid?: number | null;
   randomize?: boolean;
+  hidden?: boolean;
+};
+
+type RealRow = {
+  uid: number;
+  board: BoardKey;
+  name: string;
+  dep: number;
+  turn: number;
+  balance: number;
+  pnl: number;
+  return_pct: number;
+  frozen: boolean;
+  pinned_place: number | null;
+  override: Partial<RealRow>;
+  in_ranking: boolean;
 };
 
 type EventForm = {
@@ -32,6 +48,7 @@ type EventForm = {
   prize_loss_pct: number[];
   loss_comp_cap: number;
   prize_places: number;
+  top_visible: number;
   show_nomination_a: boolean;
   show_nomination_b: boolean;
   settings_version: number;
@@ -138,6 +155,8 @@ export function EventPanel({
   const [edit, setEdit] = useState<ShowcaseRow | null>(null);
   const [busy, setBusy] = useState("");
   const [addUid, setAddUid] = useState("");
+  const [realRows, setRealRows] = useState<RealRow[]>([]);
+  const [realEdit, setRealEdit] = useState<RealRow | null>(null);
 
   useEffect(() => {
     let dead = false;
@@ -148,7 +167,9 @@ export function EventPanel({
           rows: ShowcaseRow[];
           boards?: { A?: ShowcaseRow[]; B?: ShowcaseRow[] };
         };
+        const real = (await adminFetch("/admin/real-leads")) as { rows: RealRow[] };
         if (dead) return;
+        setRealRows(real.rows || []);
         const prize_places = Number(s.prize_places || 3);
         const prize_yield = ((s.prize_yield as number[]) || []).slice();
         const prize_loss_pct = ((s.prize_loss_pct as number[]) || []).slice();
@@ -164,6 +185,7 @@ export function EventPanel({
           rami_url: String(s.rami_url || ""),
           event_rules: ((s.event_rules as string[]) || []).join("\n"),
           prize_places,
+          top_visible: Number(s.top_visible || 10),
           prize_yield,
           prize_loss_pct,
           loss_comp_cap: Number(s.loss_comp_cap || 0),
@@ -203,6 +225,8 @@ export function EventPanel({
           ? {
               settings_version: version,
               prize_pool: Number(form.prize_pool),
+              prize_places: Number(form.prize_places),
+              prize_yield: form.prize_yield,
               prize_table: form.prize_table.map((p) => ({
                 place: p.place,
                 amount: Number(p.amount),
@@ -226,6 +250,7 @@ export function EventPanel({
                 .filter(Boolean),
               show_nomination_a: form.show_nomination_a,
               show_nomination_b: form.show_nomination_b,
+              top_visible: form.top_visible,
             };
       const saved = (await adminFetch("/admin/settings", "PATCH", body)) as { settings_version?: number };
       if (saved && saved.settings_version != null) {
@@ -252,6 +277,7 @@ export function EventPanel({
       return_pct: Number(r.return_pct),
       uid: r.uid || null,
       randomize: r.randomize !== false,
+      hidden: r.hidden === true,
     }));
   }
 
@@ -283,6 +309,34 @@ export function EventPanel({
     }));
   }
 
+  async function saveReal() {
+    if (!realEdit) return;
+    setBusy("real");
+    onError("");
+    try {
+      await adminFetch(`/admin/real-leads/${realEdit.board}/${realEdit.uid}`, "PATCH", {
+        frozen: realEdit.frozen,
+        pinned_place: realEdit.pinned_place,
+        ...(realEdit.frozen ? {
+          name: realEdit.override.name ?? realEdit.name,
+          dep: realEdit.override.dep ?? realEdit.dep,
+          turn: realEdit.override.turn ?? realEdit.turn,
+          balance: realEdit.override.balance ?? realEdit.balance,
+          pnl: realEdit.override.pnl ?? realEdit.pnl,
+          return_pct: realEdit.override.return_pct ?? realEdit.return_pct,
+        } : {}),
+      });
+      const data = (await adminFetch("/admin/real-leads")) as { rows: RealRow[] };
+      setRealRows(data.rows || []);
+      setRealEdit(null);
+      onStatus("Настройки реального лида сохранены");
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "ошибка");
+    } finally {
+      setBusy("");
+    }
+  }
+
   function patchPrize(i: number, patch: Partial<PrizeRow>) {
     setForm((prev) => {
       if (!prev) return prev;
@@ -302,7 +356,7 @@ export function EventPanel({
         <div className="page-header">
           <div>
             <h1 className="page-title">Редактор Топ-10</h1>
-            <div className="page-subtitle">🎲 Оба топа настраиваются отдельно, включая рандомизацию каждой строки</div>
+            <div className="page-subtitle">🎲 Демо-лиды и реальные участники настраиваются отдельно</div>
           </div>
           <div className="header-actions">
             <button className="btn btn-success" type="button" onClick={() => void saveTop()} disabled={busy === "top"}>
@@ -340,6 +394,7 @@ export function EventPanel({
                   <th>{lossBoard ? "Потеря" : "Прибыль"}</th>
                   <th>Доходность</th>
                   <th>🎲 Рандом</th>
+                  <th>Видимость</th>
                   <th>Действия</th>
                 </tr>
               </thead>
@@ -368,6 +423,11 @@ export function EventPanel({
                       </span>
                     </td>
                     <td>
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => patchRow(row.place, { hidden: !row.hidden })}>
+                        {row.hidden ? "Показать" : "Скрыть"}
+                      </button>
+                    </td>
+                    <td>
                       <button type="button" className="btn btn-ghost btn-icon" onClick={() => setEdit({ ...row })}>
                         ✏️
                       </button>
@@ -378,6 +438,53 @@ export function EventPanel({
             </table>
           </div>
         </div>
+        <div className="card">
+          <div className="card-header"><div className="card-title">Реальные лиды · номинация {board}</div></div>
+          <p className="form-hint">Реальные лиды определяются по регистрации, не рандомизируются. Зафиксированное место не занимают демо-лиды; ручная правка доступна после остановки синхронизации.</p>
+          <div className="table-container">
+            <table className="data-table">
+              <thead><tr><th>UID</th><th>Имя</th><th>Депозит</th><th>PNL</th><th>Режим</th><th>Место</th><th>Действия</th></tr></thead>
+              <tbody>
+                {realRows.filter((r) => r.board === board).map((r) => (
+                  <tr key={r.uid}>
+                    <td>{r.uid}</td><td>{r.override.name ?? r.name}</td>
+                    <td>{money(r.override.dep ?? r.dep)}</td><td>{money(r.override.pnl ?? r.pnl)}</td>
+                    <td>{r.frozen ? "Ручной" : "API"}</td><td>{r.pinned_place ?? "Авто"}</td>
+                    <td><button type="button" className="btn btn-ghost btn-sm" onClick={() => setRealEdit({ ...r, override: { ...r.override } })}>✏️ Редактировать</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {realEdit && (
+          <div className="modal-overlay active" onClick={() => setRealEdit(null)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <h3>Реальный лид · UID {realEdit.uid}</h3>
+              <label className="check-row">
+                <input type="checkbox" checked={realEdit.frozen} onChange={(e) => setRealEdit({ ...realEdit, frozen: e.target.checked })} />
+                Отключить синхронизацию с API и редактировать вручную
+              </label>
+              <div className="form-group">
+                <label className="form-label">Закрепить место (пусто = автоматический рейтинг)</label>
+                <input className="form-input" type="number" min={1} max={20} value={realEdit.pinned_place ?? ""}
+                  onChange={(e) => setRealEdit({ ...realEdit, pinned_place: e.target.value ? Number(e.target.value) : null })} />
+              </div>
+              {realEdit.frozen && (["name", "dep", "turn", "balance", "pnl", "return_pct"] as const).map((key) => (
+                <div className="form-group" key={key}>
+                  <label className="form-label">{key}</label>
+                  <input className="form-input" type={key === "name" ? "text" : "number"} step={key === "name" ? undefined : "any"}
+                    value={realEdit.override[key] ?? realEdit[key]}
+                    onChange={(e) => setRealEdit({ ...realEdit, override: { ...realEdit.override, [key]: key === "name" ? e.target.value : Number(e.target.value) } })} />
+                </div>
+              ))}
+              <div className="header-actions">
+                <button type="button" className="btn btn-ghost" onClick={() => setRealEdit(null)}>Отмена</button>
+                <button type="button" className="btn btn-success" disabled={busy === "real"} onClick={() => void saveReal()}>Сохранить</button>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="card">
           <div className="card-header">
             <div className="card-title">➕ Найти UID в базе</div>
@@ -515,6 +622,24 @@ export function EventPanel({
               onChange={(e) => setForm({ ...form, prize_pool: Number(e.target.value) })}
             />
             <div className="form-hint">Общая сумма, которую вы готовы выплатить победителям</div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Число призовых мест (1–20)</label>
+            <input className="form-input" type="number" min={1} max={20} value={form.prize_places}
+              onChange={(e) => {
+                const n = Math.max(1, Math.min(20, Number(e.target.value) || 1));
+                setForm({
+                  ...form, prize_places: n,
+                  prize_yield: Array.from({ length: n }, (_, i) => form.prize_yield[i] ?? 0),
+                  prize_loss_pct: Array.from({ length: n }, (_, i) => form.prize_loss_pct[i] ?? 0),
+                  prize_table: Array.from({ length: n }, (_, i) => {
+                    const place = i + 1;
+                    const existing = form.prize_table.find((p) => p.place === `${place} место` || p.place === `${place} места`);
+                    return { place: `${place} место`, amount: existing?.amount ?? (place >= 6 && place <= 10 ? form.prize_table.find((p) => p.place.includes("6–10"))?.amount ?? 0 : 0), suffix: "" };
+                  }),
+                });
+              }} />
+            <div className="form-hint">Количество призов по доходности и компенсаций по потерям.</div>
           </div>
           <h3 style={{ fontFamily: "Orbitron, sans-serif", fontSize: 16, margin: "25px 0 15px", color: "var(--neon-gold)" }}>
             Распределение призов
@@ -688,6 +813,11 @@ export function EventPanel({
           <span className="card-badge badge-live">● Настраиваемый интервал</span>
         </div>
         <div className="randomization-settings">
+          <div className="form-group">
+            <label className="form-label">Строк в публичном списке (3–80)</label>
+            <input className="form-input" type="number" min={3} max={80} value={form.top_visible}
+              onChange={(e) => setForm({ ...form, top_visible: Number(e.target.value) })} />
+          </div>
           <h3>⚡ Интервал обновления данных</h3>
           <div className="form-group">
             <label className="form-label">Интервал рандомизации (минуты)</label>

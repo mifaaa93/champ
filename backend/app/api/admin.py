@@ -1,12 +1,14 @@
 import time
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from pydantic import BaseModel, Field, field_validator
+import math
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_session
-from app.models import DayLedger, Participant, Snapshot
+from app.models import DayLedger, Participant, Snapshot, RealLeadOverride, Trader
 from app.ratelimit import client_ip, limiter
 from app.schemas import ProfilePatch, SettingsPatch, ShowcaseIn, day_cash, dec
 from app.services.event import list_showcase, save_showcase
@@ -76,7 +78,150 @@ async def put_showcase(
         saved[code] = await save_showcase(session, body.rows, code)
     rows_a = saved.get("A") or await list_showcase(session, "A")
     rows_b = saved.get("B") or await list_showcase(session, "B")
+    from app.services.event import refresh_event_boards
+
+    await refresh_event_boards(session)
     return {"rows": rows_a, "boards": {"A": rows_a, "B": rows_b}}
+
+
+@router.get("/real-leads", dependencies=[Depends(require_admin)])
+async def list_real_leads(session: AsyncSession = Depends(get_session)) -> dict:
+    from app.services.event import real_entries
+
+    entries = await real_entries(session)
+    overrides = {
+        (r.board, r.uid): r
+        for r in (await session.execute(select(RealLeadOverride))).scalars().all()
+    }
+    rows = []
+    for entry in entries:
+        for board in ("A", "B"):
+            override = overrides.get((board, entry["uid"]))
+            rows.append(
+                {
+                    **entry,
+                    "board": board,
+                    "frozen": bool(override and override.frozen),
+                    "pinned_place": override.pinned_place if override else None,
+                    "override": (override.values or {}) if override else {},
+                }
+            )
+    return {"rows": rows}
+
+
+class RealLeadPatch(BaseModel):
+    frozen: bool = False
+    pinned_place: int | None = Field(default=None, ge=1, le=20)
+    name: str | None = Field(default=None, min_length=1, max_length=64)
+    dep: float | None = Field(default=None, ge=0)
+    turn: float | None = Field(default=None, ge=0)
+    balance: float | None = Field(default=None, ge=0)
+    pnl: float | None = None
+    return_pct: float | None = None
+
+    @field_validator("dep", "turn", "balance", "pnl", "return_pct")
+    @classmethod
+    def finite(cls, value: float | None) -> float | None:
+        if value is not None and not math.isfinite(value):
+            raise ValueError("Требуется конечное число")
+        return value
+
+
+@router.patch("/real-leads/{board}/{uid}", dependencies=[Depends(require_admin)])
+async def patch_real_lead(
+    board: str,
+    uid: int,
+    body: RealLeadPatch,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    if board.upper() not in {"A", "B"}:
+        raise HTTPException(422, "Номинация A или B")
+    if not (await session.execute(select(Participant.uid).where(Participant.uid == uid))).scalar_one_or_none():
+        raise HTTPException(404, "Реальный участник не найден")
+    code = "B" if board.upper() == "B" else "A"
+    if body.pinned_place is not None:
+        taken = (
+            await session.execute(
+                select(RealLeadOverride.uid).where(
+                    RealLeadOverride.board == code,
+                    RealLeadOverride.pinned_place == body.pinned_place,
+                    RealLeadOverride.uid != uid,
+                )
+            )
+        ).scalar_one_or_none()
+        if taken is not None:
+            raise HTTPException(409, f"Место {body.pinned_place} уже закреплено за UID {taken}")
+    row = await session.get(RealLeadOverride, {"board": code, "uid": uid})
+    if row is None:
+        row = RealLeadOverride(board=code, uid=uid)
+        session.add(row)
+    row.frozen = body.frozen
+    row.pinned_place = body.pinned_place
+    row.values = body.model_dump(exclude_none=True, exclude={"frozen", "pinned_place"})
+    await session.commit()
+    from app.services.event import refresh_event_boards
+
+    await refresh_event_boards(session)
+    return {"ok": True, "board": code, "uid": uid}
+
+
+class StatisticsPatch(BaseModel):
+    mode: str
+    players: int = Field(ge=0, le=10_000_000)
+    deposits: float = Field(ge=0, le=10_000_000_000)
+    turnover: float = Field(ge=0, le=10_000_000_000)
+
+    @field_validator("deposits", "turnover")
+    @classmethod
+    def finite(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("Требуется конечное число")
+        return value
+
+
+async def _live_statistics(session: AsyncSession) -> tuple[int, float, float]:
+    from app.services.event import real_totals, ranked_boards, visible_nominations
+    from app.settings_service import get_settings
+
+    cfg = await get_settings(session)
+    a, b = await ranked_boards(session)
+    show_a, show_b = visible_nominations(cfg)
+    return real_totals([board for board, visible in ((a, show_a), (b, show_b)) if visible])
+
+
+def statistics_display(cfg: dict, actual: tuple[int, float, float]) -> dict:
+    offset = cfg.get("stats_offset") or {}
+    keys = ("players", "deposits", "turnover")
+    return {
+        key: max(0, value + float(offset.get(key) or 0)) if cfg.get("stats_mode") == "editable" else value
+        for key, value in zip(keys, actual)
+    }
+
+
+@router.get("/statistics", dependencies=[Depends(require_admin)])
+async def get_statistics(session: AsyncSession = Depends(get_session)) -> dict:
+    from app.settings_service import get_settings
+
+    cfg = await get_settings(session)
+    actual = await _live_statistics(session)
+    return {
+        "mode": cfg.get("stats_mode", "real"),
+        "real": dict(zip(("players", "deposits", "turnover"), actual)),
+        "display": statistics_display(cfg, actual),
+    }
+
+
+@router.patch("/statistics", dependencies=[Depends(require_admin)])
+async def patch_statistics(body: StatisticsPatch, session: AsyncSession = Depends(get_session)) -> dict:
+    from app.settings_service import update_settings
+
+    if body.mode not in {"real", "editable"}:
+        raise HTTPException(422, "Режим: real или editable")
+    actual = await _live_statistics(session)
+    target = (body.players, body.deposits, body.turnover)
+    offset = {key: desired - current for key, desired, current in zip(("players", "deposits", "turnover"), target, actual)}
+    saved = await update_settings(session, {"stats_mode": body.mode, "stats_offset": offset})
+    return {**await get_statistics(session), "settings_version": saved["settings_version"]}
 
 
 @router.post("/snapshot", dependencies=[Depends(require_admin)])
@@ -135,10 +280,22 @@ async def telegram_send(kind: str = Query("hourly")) -> dict:
 
 @router.get("/participants", dependencies=[Depends(require_admin)])
 async def list_participants(session: AsyncSession = Depends(get_session)) -> dict:
+    from app.settings_service import job_get
+
     day = dubai_today()
     parts = (
         await session.execute(select(Participant).order_by(Participant.created_at.desc()))
     ).scalars().all()
+    season = await job_get(session, "event_season")
+    api_uids = {
+        int(uid) for uid in (season.get("by_uid") or {})
+        if str(uid).isdigit()
+    }
+    known = {p.uid for p in parts}
+    trader_rows = (
+        await session.execute(select(Trader).where(Trader.uid.in_(api_uids - known)))
+    ).scalars().all() if api_uids - known else []
+    traders = {r.uid: r for r in trader_rows}
     ledgers = {
         led.uid: led
         for led in (
@@ -180,6 +337,24 @@ async def list_participants(session: AsyncSession = Depends(get_session)) -> dic
                 "deposits": dec(day_cash(led.day_deposits, led.stats_depo_sum)) if led else None,
             }
         )
+    for uid in sorted(api_uids - known):
+        led = ledgers.get(uid)
+        trader = traders.get(uid)
+        rows.append({
+            "uid": uid,
+            "nickname": "",
+            "registered": False,
+            "telegram": "",
+            "country": (trader.country or "") if trader else "",
+            "created_at": None,
+            "last_checked_at": trader.updated_at.isoformat() if trader and trader.updated_at else None,
+            "eligible": False,
+            "dq_reason": "not_registered",
+            "balance": dec(led.last_balance) if led else None,
+            "pnl": dec(led.contest_pnl) if led else None,
+            "return_pct": dec(led.return_pct) if led else None,
+            "deposits": float((season.get("by_uid") or {}).get(str(uid)) or 0),
+        })
     return {"day": str(day), "count": len(rows), "rows": rows}
 
 

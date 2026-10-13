@@ -9,6 +9,7 @@ from app.services.event import (
     season_deposit_delta,
     merge_board,
     merge_nomination,
+    place_pinned,
     min_event_deposit,
     neighbor_window,
     nudge_amount,
@@ -35,7 +36,31 @@ def test_sort_by_dep_assigns_ranks():
         ]
     )
     assert [r["uid"] for r in ranked] == [222222222, 333333333, 111111111]
-    assert [r["rank"] for r in ranked] == [1, 2, 3]
+
+
+def test_pinned_real_keeps_place_when_dummies_reorder():
+    real = {"uid": 123456789, "dummy": False, "name": "real"}
+    dummies = [
+        {"uid": -1, "dummy": True, "name": "one"},
+        {"uid": -2, "dummy": True, "name": "two"},
+        {"uid": -3, "dummy": True, "name": "three"},
+    ]
+    for order in (dummies + [real], list(reversed(dummies)) + [real]):
+        result = place_pinned(order, {123456789: 3})
+        assert result[2]["uid"] == 123456789
+        assert sorted(r["uid"] for r in result) == [-3, -2, -1, 123456789]
+        assert [r["rank"] for r in result] == [1, 2, 3, 4]
+
+
+def test_hidden_dummy_does_not_take_place():
+    ranked = merge_nomination(
+        [{"place": 1, "name": "hidden", "dep": 100, "hidden": True, "return_pct": 20},
+         {"place": 2, "name": "visible", "dep": 50, "return_pct": 10}],
+        [{"uid": 123456789, "name": "real", "dep": 100, "pnl": 50, "return_pct": 5}],
+        "A",
+    )
+    assert [r["name"] for r in ranked] == ["visible", "real"]
+    assert [r["rank"] for r in ranked] == [1, 2]
 
 
 def test_neighbor_window_includes_self():

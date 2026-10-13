@@ -1,6 +1,7 @@
 .env
 .venv/
 venv/
+.playwright-mcp/
 __pycache__/
 *.pyc
 .pytest_cache/
@@ -9,6 +10,7 @@ __pycache__/
 backend/.venv/
 web/node_modules/
 web/.next/
+web/tsconfig.tsbuildinfo
 web/out/
 *.log
 .DS_Store

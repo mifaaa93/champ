@@ -26,6 +26,41 @@ from app.timezone import (
 router = APIRouter(prefix="/public")
 
 
+@router.get("/history/{uid}")
+async def trader_history(
+    uid: int, request: Request, session: AsyncSession = Depends(get_session)
+) -> dict:
+    """Archived championship outcomes; lookup does not require website registration."""
+    await limit_check(request, "history")
+    if uid < 100_000_000 or uid > 9_999_999_999:
+        raise HTTPException(400, "Некорректный UID")
+    results = (
+        await session.execute(
+            select(DayResult).where(DayResult.uid == uid).order_by(DayResult.day.desc())
+        )
+    ).scalars().all()
+    participation_days = set(
+        (await session.execute(select(DayLedger.day).where(DayLedger.uid == uid, DayLedger.registered.is_(True)))).scalars().all()
+    )
+    days = participation_days | {item.day for item in results}
+    return {
+        "uid": uid,
+        "championships": len(days),
+        "wins": sum(item.place == 1 for item in results),
+        "usdt": round(sum(float(item.prize_amount or 0) for item in results), 2),
+        "results": [
+            {
+                "day": str(item.day),
+                "nomination": item.nomination,
+                "place": item.place,
+                "pnl": dec(item.pnl),
+                "usdt": dec(item.prize_amount),
+            }
+            for item in results
+        ],
+    }
+
+
 async def limit_check(request: Request, scope: str) -> None:
     ip = client_ip(request)
     burst_ok, burst_retry = await limiter.allow(f"{scope}:burst:{ip}", 8, 60)

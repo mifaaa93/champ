@@ -171,6 +171,17 @@ class ShowcaseLead(Base):
     return_pct: Mapped[Decimal] = mapped_column(Numeric(18, 6), default=0)
     uid: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     randomize: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    hidden: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class RealLeadOverride(Base):
+    __tablename__ = "real_lead_overrides"
+
+    board: Mapped[str] = mapped_column(String(1), primary_key=True)
+    uid: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    frozen: Mapped[bool] = mapped_column(Boolean, default=False)
+    pinned_place: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    values: Mapped[dict] = mapped_column(JSONB, default=dict)

@@ -282,6 +282,8 @@ def merge_nomination(dummies: list[dict], reals: list[dict], board: str) -> list
     code = board_code(board)
     entries: list[dict] = []
     for d in dummies:
+        if d.get("hidden"):
+            continue
         place = int(d.get("place") or 0)
         entries.append(
             {
@@ -330,6 +332,23 @@ def merge_nomination(dummies: list[dict], reals: list[dict], board: str) -> list
             }
         )
     return sort_by_loss(entries) if code == "B" else sort_by_yield(entries)
+
+
+def place_pinned(ordered: list[dict], pins: dict[int, int]) -> list[dict]:
+    """Reserve explicit real-lead places; everyone else competes for free slots."""
+    reserved: dict[int, dict] = {}
+    rest: list[dict] = []
+    for row in ordered:
+        place = pins.get(int(row["uid"])) if not row.get("dummy") else None
+        if place is not None and 0 < place <= len(ordered) and place not in reserved:
+            reserved[place] = row
+        else:
+            rest.append(row)
+    output: list[dict] = []
+    for place in range(1, len(ordered) + 1):
+        output.append(reserved.get(place) or rest.pop(0))
+    # Pins beyond the current board size are deliberately inactive until enough entrants exist.
+    return _stamp_ranks(output)
 
 
 TRACKED_RANKS = 80
@@ -476,6 +495,10 @@ def combined_totals(boards: list[list[dict]]) -> tuple[int, float, float]:
     return players, deposits, turnover
 
 
+def real_totals(boards: list[list[dict]]) -> tuple[int, float, float]:
+    return combined_totals([[row for row in board if not row.get("dummy")] for board in boards])
+
+
 def activity_time_label(ts: float, now: float) -> str:
     sec = max(0, int(now - ts))
     if sec < 45:
@@ -520,6 +543,7 @@ def _showcase_out(row: ShowcaseLead) -> dict:
         "return_pct": dec(getattr(row, "return_pct", 0)),
         "uid": row.uid,
         "randomize": bool(getattr(row, "randomize", True)),
+        "hidden": bool(getattr(row, "hidden", False)),
     }
 
 
@@ -609,6 +633,7 @@ async def save_showcase(
         row.return_pct = _finite_amount(raw.get("return_pct"), f"Доходность места {place}")
         row.uid = uid_i
         row.randomize = bool(raw.get("randomize", True))
+        row.hidden = bool(raw.get("hidden", False))
     await session.flush()
     if commit:
         await session.commit()
@@ -632,9 +657,14 @@ async def public_event(session: AsyncSession, uid: int | None = None) -> dict:
         visible.append(board_a)
     if show_b:
         visible.append(board_b)
-    players, deposits, turnover = combined_totals(visible)
-    top_a = _public_top(board_a)
-    top_b = _public_top(board_b)
+    players, deposits, turnover = real_totals(visible)
+    if cfg.get("stats_mode") == "editable":
+        offset = cfg.get("stats_offset") or {}
+        players = max(0, players + int(offset.get("players") or 0))
+        deposits = max(0.0, deposits + float(offset.get("deposits") or 0))
+        turnover = max(0.0, turnover + float(offset.get("turnover") or 0))
+    top_a = _public_top(board_a, int(cfg.get("top_visible") or 10))
+    top_b = _public_top(board_b, int(cfg.get("top_visible") or 10))
     you = None
     if uid:
         you = _dual_profile(board_a, board_b, uid, players)
@@ -878,10 +908,42 @@ async def real_entries(session: AsyncSession) -> list[dict]:
 
 
 async def ranked_boards(session: AsyncSession) -> tuple[list[dict], list[dict]]:
-    reals = [r for r in await real_entries(session) if r.get("in_ranking")]
+    from app.models import RealLeadOverride
+
+    cfg = await get_settings(session)
+    threshold = min_event_deposit(cfg)
+    reals = await real_entries(session)
+    overrides = (await session.execute(select(RealLeadOverride))).scalars().all()
+    by_board = {"A": {}, "B": {}}
+    for row in overrides:
+        if row.board in by_board:
+            by_board[row.board][row.uid] = row
     show_a = await list_showcase(session, "A")
     show_b = await list_showcase(session, "B")
-    return merge_nomination(show_a, reals, "A"), merge_nomination(show_b, reals, "B")
+
+    def build(board: str, showcase: list[dict]) -> list[dict]:
+        configured = by_board[board]
+        entries = []
+        for real in reals:
+            override = configured.get(real["uid"])
+            copy = dict(real)
+            if override and override.frozen:
+                copy.update(override.values or {})
+                if board == "B":
+                    copy["trading_pnl"] = copy["pnl"]
+                    copy["trading_return_pct"] = copy["return_pct"]
+                copy["in_ranking"] = copy["dep"] >= threshold and not copy.get("blocked")
+            if copy.get("in_ranking"):
+                entries.append(copy)
+        ranked = merge_nomination(showcase, entries, board)
+        pins = {
+            uid: override.pinned_place
+            for uid, override in configured.items()
+            if override.pinned_place is not None
+        }
+        return place_pinned(ranked, pins)
+
+    return build("A", show_a), build("B", show_b)
 
 
 def _sync_dummy_result(row: ShowcaseLead, pnl: float) -> None:
@@ -902,7 +964,7 @@ async def tick_showcase(session: AsyncSession, rng: random.Random | None = None)
         taken[board_code(getattr(row, "board", "A"))].add(row.name)
     changed = 0
     for row in rows:
-        if not bool(getattr(row, "randomize", True)):
+        if row.hidden or not bool(getattr(row, "randomize", True)):
             continue
         code = board_code(getattr(row, "board", "A"))
         names = taken[code]
@@ -1015,13 +1077,14 @@ async def refresh_event_board(session: AsyncSession) -> tuple[list[dict], list[d
     return board_a, live
 
 
-def _public_top(board: list[dict]) -> list[dict]:
+def _public_top(board: list[dict], limit: int = 10) -> list[dict]:
     out = []
-    for r in board[:10]:
+    for r in board[:limit]:
         pnl = float(r.get("pnl") or 0)
         out.append(
             {
                 "place": r["rank"],
+                "uid": None if r.get("dummy") else r["uid"],
                 "name": r["name"],
                 "dep": r["dep"],
                 "turn": r.get("turn") or 0,

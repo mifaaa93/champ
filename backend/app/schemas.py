@@ -68,7 +68,7 @@ class SettingsPatch(BaseModel):
     prize_loss_pct: list[float] | None = None
     loss_comp_cap: float | None = Field(default=None, ge=0, le=1_000_000)
     require_trade: bool | None = None
-    prize_places: int | None = Field(default=None, ge=1, le=10)
+    prize_places: int | None = Field(default=None, ge=1, le=20)
     min_return_pct: float | None = Field(default=None, ge=-1000, le=10000)
     tg_hourly_header: str | None = Field(default=None, max_length=500)
     tg_yield_title: str | None = Field(default=None, max_length=200)
@@ -90,6 +90,7 @@ class SettingsPatch(BaseModel):
     prize_table: list[dict] | None = None
     stats_players: int | None = Field(default=None, ge=0, le=10_000_000)
     stats_turnover: float | None = Field(default=None, ge=0, le=10_000_000_000)
+    top_visible: int | None = Field(default=None, ge=3, le=80)
     telegram_channel_url: str | None = Field(default=None, max_length=300)
     rami_url: str | None = Field(default=None, max_length=300)
     event_rules: list[str] | None = None
@@ -116,8 +117,8 @@ class SettingsPatch(BaseModel):
     def yield_ok(cls, value: list[float] | None) -> list[float] | None:
         if value is None:
             return value
-        if not value or len(value) > 10:
-            raise ValueError("Призы доходности: от 1 до 10 мест")
+        if not value or len(value) > 20:
+            raise ValueError("Призы доходности: от 1 до 20 мест")
         if any((isinstance(x, float) and not math.isfinite(x)) or x < 0 or x > 1_000_000 for x in value):
             raise ValueError("Сумма приза 0–1 000 000")
         return value
@@ -127,8 +128,8 @@ class SettingsPatch(BaseModel):
     def loss_ok(cls, value: list[float] | None) -> list[float] | None:
         if value is None:
             return value
-        if not value or len(value) > 10:
-            raise ValueError("Проценты просадки: от 1 до 10 мест")
+        if not value or len(value) > 20:
+            raise ValueError("Проценты просадки: от 1 до 20 мест")
         if any((isinstance(x, float) and not math.isfinite(x)) or x < 0 or x > 100 for x in value):
             raise ValueError("Процент компенсации 0–100")
         return value
