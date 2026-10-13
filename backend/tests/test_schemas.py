@@ -51,6 +51,36 @@ def test_admin_view_hides_bot_token():
     assert view["tg_chat_id"] == "-1"
 
 
+def test_register_accepts_cyrillic_nick():
+    assert RegisterIn(uid=114653273, nickname="Иван").nickname == "Иван"
+
+
+def test_settings_reject_nan_prize():
+    with pytest.raises(ValidationError):
+        SettingsPatch(prize_yield=[float("nan")])
+
+
+def test_settings_reject_bad_event_date():
+    with pytest.raises(ValidationError):
+        SettingsPatch(event_start="not-a-date")
+
+
+def test_settings_reject_start_after_end():
+    with pytest.raises(ValidationError):
+        SettingsPatch(
+            event_start="2026-10-11T00:00:00+02:00",
+            event_end="2026-10-01T00:00:00+02:00",
+        )
+
+
+def test_merged_prizes_must_match_places_even_across_patches():
+    from app.settings_service import assert_saved_settings
+
+    current = {"prize_places": 10, "prize_yield": [100, 50, 25], "prize_loss_pct": [15, 10, 5]}
+    with pytest.raises(ValueError):
+        assert_saved_settings(current)
+
+
 def test_settings_places_must_match_prizes():
     with pytest.raises(ValidationError):
         SettingsPatch(prize_places=3, prize_yield=[100, 50])

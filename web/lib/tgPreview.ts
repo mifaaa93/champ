@@ -44,7 +44,18 @@ function fill(tpl: string, vars: Record<string, string | number>) {
 }
 
 function esc(s: string) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function safeHref(raw: string) {
+  const href = raw.trim();
+  if (!/^(https?:\/\/|tg:\/\/|mailto:)[^\s"'<>]+$/i.test(href)) return "";
+  return href;
 }
 
 function fmtPct(n: number) {
@@ -185,7 +196,7 @@ export function toPreviewHtml(text: string) {
         if (closing) out += `</${name}>`;
         else if (name === "a") {
           const href = (m[2] || "").match(/href\s*=\s*("([^"]*)"|'([^']*)')/);
-          out += `<a href="${esc(href?.[2] || href?.[3] || "")}">`;
+          out += `<a href="${esc(safeHref(href?.[2] || href?.[3] || ""))}">`;
         } else out += `<${name}>`;
         i += m[0].length;
         continue;

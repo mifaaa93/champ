@@ -61,9 +61,40 @@ def test_t0_after_deposit_not_leftover():
 def test_t0_first_snap_if_deposit_already_inside():
     first = SnapRef(1, Decimal("500"), Decimal("520"))
     later = SnapRef(2, Decimal("500"), Decimal("510"))
-    picked = pick_start_snapshot([first, later], Decimal("50"), Decimal("80"))
+    picked = pick_start_snapshot(
+        [first, later], Decimal("50"), Decimal("80"), baseline=Decimal("420")
+    )
     assert picked is not None
     assert picked.id == 1
+
+
+def test_day_statistics_do_not_prove_the_opening_snapshot():
+    opening = SnapRef(1, Decimal("530"), Decimal("30"))
+    later = SnapRef(2, Decimal("550"), Decimal("50"))
+    assert pick_start_snapshot([opening, later], Decimal("50"), Decimal("50")) is None
+    picked = pick_start_snapshot(
+        [opening, later], Decimal("50"), Decimal("50"), baseline=Decimal("500")
+    )
+    assert picked is not None
+    assert picked.id == 2
+
+
+def test_locked_start_survives_a_later_deposit():
+    first = SnapRef(1, Decimal("500"), Decimal("100"))
+    later = SnapRef(3, Decimal("550"), Decimal("60"))
+    picked = pick_start_snapshot(
+        [first, later], Decimal("50"), Decimal("100"), baseline=Decimal("450"), locked_id=1
+    )
+    assert picked is not None
+    assert picked.id == 1
+
+
+def test_zero_balance_buyin_is_not_a_penny():
+    start, now = P(0, dep=500), P(10, dep=500)
+    assert basis(start, now) == Decimal("0")
+    assert basis(start, now, Decimal("50")) == Decimal("50")
+    assert return_pct(Decimal("10"), Decimal("0")) == Decimal("0")
+    assert return_pct(Decimal("10"), Decimal("50")) == Decimal("20")
 
 
 def test_t0_none_without_qualifying_deposit():

@@ -45,7 +45,11 @@ async def patch_settings(
     chat = patch.get("tg_chat_id")
     if isinstance(chat, str):
         patch["tg_chat_id"] = chat.strip()
-    return admin_view(await update_settings(session, patch))
+    try:
+        saved = await update_settings(session, patch)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return admin_view(saved)
 
 
 @router.get("/showcase", dependencies=[Depends(require_admin)])
@@ -65,7 +69,8 @@ async def put_showcase(
             rows = body.boards.get(key)
             if rows is None:
                 continue
-            saved[key] = await save_showcase(session, rows, key)
+            saved[key] = await save_showcase(session, rows, key, commit=False)
+        await session.commit()
     else:
         code = "B" if str(body.board or "A").upper() == "B" else "A"
         saved[code] = await save_showcase(session, body.rows, code)
@@ -114,13 +119,18 @@ async def telegram_send(kind: str = Query("hourly")) -> dict:
     if kind not in {"hourly", "final"}:
         raise HTTPException(400, "kind: hourly или final")
     try:
-        await job_publish(kind, force=True)
+        result = await job_publish(kind, force=True)
     except TelegramHtmlError as exc:
         raise HTTPException(status_code=400, detail=exc.errors) from exc
     except TelegramSendError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     label = "итогов дня" if kind == "final" else "часовой"
-    return {"ok": True, "message": f"Пост {label} отправлен в группу"}
+    status = (result or {}).get("status")
+    if status == "skipped":
+        return {"ok": False, "status": status, "message": f"Пост {label} не отправлен"}
+    if status == "failed":
+        raise HTTPException(status_code=400, detail="Telegram не отправлен. Проверь токен бота и ID группы.")
+    return {"ok": True, "status": status or "sent", "message": f"Пост {label} отправлен в группу"}
 
 
 @router.get("/participants", dependencies=[Depends(require_admin)])

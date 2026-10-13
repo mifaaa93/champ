@@ -34,15 +34,38 @@ type EventForm = {
   prize_places: number;
   show_nomination_a: boolean;
   show_nomination_b: boolean;
+  settings_version: number;
 };
 
 export type EventSection = "top" | "prizes" | "params";
 
-function toLocalInput(iso: string) {
+function toChampInput(iso: string) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
+  const shifted = new Date(d.getTime() + 2 * 60 * 60 * 1000);
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}T${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}`;
+}
+
+function fromChampInput(value: string) {
+  if (!value) return "";
+  const [date, time] = value.split("T");
+  if (!date || !time) return "";
+  const parsed = new Date(`${date}T${time}:00+02:00`);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString();
+}
+
+function prizeLineTotal(row: PrizeRow) {
+  const amount = Number(row.amount || 0);
+  if ((row.suffix || "").trim() === "каждое") {
+    const match = String(row.place || "").match(/(\d+)\s*[–-]\s*(\d+)/);
+    if (match) {
+      const count = Number(match[2]) - Number(match[1]) + 1;
+      if (count > 0) return amount * count;
+    }
+  }
+  return amount;
 }
 
 function money(n: number) {
@@ -100,11 +123,13 @@ export function EventPanel({
   adminFetch,
   onStatus,
   onError,
+  onVersion,
   section,
 }: {
   adminFetch: (path: string, method?: string, body?: unknown) => Promise<unknown>;
   onStatus: (s: string) => void;
   onError: (s: string) => void;
+  onVersion?: (version: number) => void;
   section: EventSection;
 }) {
   const [form, setForm] = useState<EventForm | null>(null);
@@ -144,6 +169,7 @@ export function EventPanel({
           loss_comp_cap: Number(s.loss_comp_cap || 0),
           show_nomination_a: s.show_nomination_a !== false,
           show_nomination_b: s.show_nomination_b !== false,
+          settings_version: Number(s.settings_version || 0),
         });
         const packedA = packRows(sc.boards?.A || sc.rows || []);
         const packedB = packRows(sc.boards?.B || []);
@@ -159,7 +185,7 @@ export function EventPanel({
   }, []);
 
   const prizeSum = useMemo(
-    () => (form?.prize_table || []).reduce((acc, p) => acc + Number(p.amount || 0), 0),
+    () => (form?.prize_table || []).reduce((acc, p) => acc + prizeLineTotal(p), 0),
     [form],
   );
   const remaining = (form?.prize_pool || 0) - prizeSum;
@@ -171,40 +197,43 @@ export function EventPanel({
     setBusy("set");
     onError("");
     try {
-      const parsed = new Date(form.event_end);
-      const endIso = Number.isNaN(parsed.getTime())
-        ? new Date(Date.now() + 14 * 86400000).toISOString()
-        : parsed.toISOString();
-      const startParsed = new Date(form.event_start);
-      const startIso = Number.isNaN(startParsed.getTime())
-        ? new Date(Date.now()).toISOString()
-        : startParsed.toISOString();
-      await adminFetch("/admin/settings", "PATCH", {
-        event_name: form.event_name,
-        event_start: startIso,
-        event_end: endIso,
-        event_min_deposit: Math.max(50, Number(form.event_min_deposit) || 50),
-        dummy_tick_minutes: Math.max(0.5, Number(form.dummy_tick_minutes) || 1),
-        prize_pool: Number(form.prize_pool),
-        prize_table: form.prize_table.map((p) => ({
-          place: p.place,
-          amount: Number(p.amount),
-          suffix: p.suffix || "",
-        })),
-        telegram_channel_url: form.telegram_channel_url,
-        rami_url: form.rami_url,
-        event_rules: form.event_rules
-          .split("\n")
-          .map((x) => x.trim())
-          .filter(Boolean),
-        prize_places: Number(form.prize_places),
-        prize_yield: form.prize_yield.map((n) => Number(n)),
-        prize_loss_pct: form.prize_loss_pct.map((n) => Number(n)),
-        loss_comp_cap: Number(form.loss_comp_cap),
-        show_nomination_a: form.show_nomination_a,
-        show_nomination_b: form.show_nomination_b,
-      });
-      onStatus("Параметры чемпионата сохранены");
+      const version = Number(form.settings_version || 0);
+      const body =
+        section === "prizes"
+          ? {
+              settings_version: version,
+              prize_pool: Number(form.prize_pool),
+              prize_table: form.prize_table.map((p) => ({
+                place: p.place,
+                amount: Number(p.amount),
+                suffix: p.suffix || "",
+              })),
+              prize_loss_pct: form.prize_loss_pct.map((n) => Number(n)),
+              loss_comp_cap: Number(form.loss_comp_cap),
+            }
+          : {
+              settings_version: version,
+              event_name: form.event_name,
+              event_start: form.event_start,
+              event_end: form.event_end,
+              event_min_deposit: Math.max(50, Number(form.event_min_deposit) || 50),
+              dummy_tick_minutes: Math.max(0.5, Number(form.dummy_tick_minutes) || 1),
+              telegram_channel_url: form.telegram_channel_url,
+              rami_url: form.rami_url,
+              event_rules: form.event_rules
+                .split("\n")
+                .map((x) => x.trim())
+                .filter(Boolean),
+              show_nomination_a: form.show_nomination_a,
+              show_nomination_b: form.show_nomination_b,
+            };
+      const saved = (await adminFetch("/admin/settings", "PATCH", body)) as { settings_version?: number };
+      if (saved && saved.settings_version != null) {
+        const version = Number(saved.settings_version);
+        setForm((prev) => (prev ? { ...prev, settings_version: version } : prev));
+        onVersion?.(version);
+      }
+      onStatus(section === "prizes" ? "Призы сохранены" : "Параметры чемпионата сохранены");
     } catch (err) {
       onError(err instanceof Error ? err.message : "ошибка");
     } finally {
@@ -383,6 +412,7 @@ export function EventPanel({
                     value={edit.uid ?? ""}
                     onChange={(e) => setEdit({ ...edit, uid: e.target.value ? Number(e.target.value) : null })}
                   />
+                  <div className="form-hint">Справочное поле. На сайте эта строка остаётся демо и не привязывается к живому счёту.</div>
                 </div>
               </div>
               <div className="form-row">
@@ -593,21 +623,21 @@ export function EventPanel({
         </div>
         <div className="form-row">
           <div className="form-group">
-            <label className="form-label">Начало таймера</label>
+            <label className="form-label">Начало таймера, UTC+2</label>
             <input
               className="form-input"
               type="datetime-local"
-              value={toLocalInput(form.event_start)}
-              onChange={(e) => setForm({ ...form, event_start: e.target.value })}
+              value={toChampInput(form.event_start)}
+              onChange={(e) => setForm({ ...form, event_start: fromChampInput(e.target.value) })}
             />
           </div>
           <div className="form-group">
-            <label className="form-label">Конец чемпионата</label>
+            <label className="form-label">Конец чемпионата, UTC+2</label>
             <input
               className="form-input"
               type="datetime-local"
-              value={toLocalInput(form.event_end)}
-              onChange={(e) => setForm({ ...form, event_end: e.target.value })}
+              value={toChampInput(form.event_end)}
+              onChange={(e) => setForm({ ...form, event_end: fromChampInput(e.target.value) })}
             />
           </div>
         </div>

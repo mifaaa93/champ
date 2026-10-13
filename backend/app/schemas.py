@@ -1,3 +1,4 @@
+import math
 import re
 from datetime import datetime
 from decimal import Decimal
@@ -97,6 +98,18 @@ class SettingsPatch(BaseModel):
     tg_chat_id: str | None = Field(default=None, max_length=80)
     show_nomination_a: bool | None = None
     show_nomination_b: bool | None = None
+    settings_version: int | None = Field(default=None, ge=0)
+
+    @field_validator("event_start", "event_end")
+    @classmethod
+    def event_dt(cls, value: str | None) -> str | None:
+        if value is None or not str(value).strip():
+            return value
+        try:
+            datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("Дата чемпионата: ISO, часовой пояс UTC+2") from exc
+        return value
 
     @field_validator("prize_yield")
     @classmethod
@@ -105,7 +118,7 @@ class SettingsPatch(BaseModel):
             return value
         if not value or len(value) > 10:
             raise ValueError("Призы доходности: от 1 до 10 мест")
-        if any(x < 0 or x > 1_000_000 for x in value):
+        if any((isinstance(x, float) and not math.isfinite(x)) or x < 0 or x > 1_000_000 for x in value):
             raise ValueError("Сумма приза 0–1 000 000")
         return value
 
@@ -116,13 +129,34 @@ class SettingsPatch(BaseModel):
             return value
         if not value or len(value) > 10:
             raise ValueError("Проценты просадки: от 1 до 10 мест")
-        if any(x < 0 or x > 100 for x in value):
+        if any((isinstance(x, float) and not math.isfinite(x)) or x < 0 or x > 100 for x in value):
             raise ValueError("Процент компенсации 0–100")
         return value
 
     @model_validator(mode="after")
     def lengths(self) -> "SettingsPatch":
+        for name in (
+            "min_day_deposit",
+            "loss_comp_cap",
+            "min_return_pct",
+            "event_min_deposit",
+            "dummy_tick_minutes",
+            "prize_pool",
+            "stats_turnover",
+        ):
+            value = getattr(self, name)
+            if isinstance(value, float) and not math.isfinite(value):
+                raise ValueError(f"{name}: нужно конечное число")
         places = self.prize_places
+        if self.event_start and self.event_end:
+            start = datetime.fromisoformat(str(self.event_start).replace("Z", "+00:00"))
+            end = datetime.fromisoformat(str(self.event_end).replace("Z", "+00:00"))
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=end.tzinfo)
+            if end.tzinfo is None:
+                end = end.replace(tzinfo=start.tzinfo)
+            if start >= end:
+                raise ValueError("Старт чемпионата должен быть раньше окончания")
         if places is None:
             return self
         if self.prize_yield is not None and len(self.prize_yield) != places:

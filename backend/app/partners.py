@@ -27,16 +27,18 @@ class RateLimiter:
                 now = time.monotonic()
                 self._minute = [t for t in self._minute if now - t < 60]
                 self._second = [t for t in self._second if now - t < 1]
-                if (
-                    len(self._minute) < self.per_minute
-                    and len(self._second) < self.per_second
-                ):
+                minute_full = len(self._minute) >= self.per_minute
+                second_full = len(self._second) >= self.per_second
+                if not minute_full and not second_full:
                     self._minute.append(now)
                     self._second.append(now)
                     break
-                wait_m = 60 - (now - self._minute[0]) if self._minute else 0
-                wait_s = 1 - (now - self._second[0]) if self._second else 0
-                wait = max(wait_m, wait_s, 0.05)
+                wait = 0.0
+                if second_full and self._second:
+                    wait = max(wait, 1 - (now - self._second[0]))
+                if minute_full and self._minute:
+                    wait = max(wait, 60 - (now - self._minute[0]))
+                wait = max(wait, 0.05)
             await asyncio.sleep(wait)
         await self.sem.acquire()
 
@@ -60,23 +62,23 @@ class PartnersClient:
         return {"Authorization": f"Bearer {self.token}"}
 
     async def _get(self, limiter: RateLimiter, url: str, params: dict | None = None) -> Any:
-        await limiter.acquire()
-        try:
-            for attempt in range(5):
+        for attempt in range(5):
+            await limiter.acquire()
+            try:
                 resp = await self._http.get(url, headers=self._headers(), params=params)
-                if resp.status_code == 429:
-                    retry = resp.headers.get("Retry-After")
-                    wait = float(retry) if retry else 2 + attempt
-                    log.warning("429 from %s, sleep %s", url, wait)
-                    await asyncio.sleep(wait)
-                    continue
-                if resp.status_code == 404:
-                    return None
-                resp.raise_for_status()
-                return resp.json()
-            raise RuntimeError(f"rate-limited: {url}")
-        finally:
-            limiter.release()
+            finally:
+                limiter.release()
+            if resp.status_code == 429:
+                retry = resp.headers.get("Retry-After")
+                wait = float(retry) if retry else 2 + attempt
+                log.warning("429 from %s, sleep %s", url, wait)
+                await asyncio.sleep(wait)
+                continue
+            if resp.status_code == 404:
+                return None
+            resp.raise_for_status()
+            return resp.json()
+        raise RuntimeError(f"rate-limited: {url}")
 
     async def statistics_traders(self, day: str) -> dict:
         return await self.statistics_range(day, day)

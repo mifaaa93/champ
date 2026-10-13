@@ -6,6 +6,7 @@ from app.services.event import (
     combined_totals,
     dummy_live_events,
     dummy_uid,
+    season_deposit_delta,
     merge_board,
     merge_nomination,
     min_event_deposit,
@@ -230,6 +231,72 @@ def test_loss_board_ranks_biggest_loss_and_skips_profit():
     )
     assert [r["uid"] for r in ranked] == [2, 1]
     assert sort_by_yield([{"uid": 1, "return_pct": 1, "pnl": 1}, {"uid": 2, "return_pct": 9, "pnl": 1}])[0]["uid"] == 2
+
+
+def test_withdrawal_does_not_enter_the_loss_board():
+    reals = [
+        {
+            "uid": 141917235,
+            "name": "Вывел",
+            "dep": 100,
+            "pnl": -100,
+            "trading_pnl": 20,
+            "return_pct": -10,
+            "trading_return_pct": 4,
+        }
+    ]
+    assert merge_nomination([], reals, "B") == []
+    assert merge_nomination([], reals, "A") == []
+
+
+def test_loss_board_uses_trading_pnl():
+    board = merge_nomination(
+        [],
+        [
+            {
+                "uid": 141917235,
+                "name": "Торговля",
+                "dep": 100,
+                "pnl": -200,
+                "trading_pnl": -40,
+                "return_pct": -20,
+                "trading_return_pct": -8,
+            }
+        ],
+        "B",
+    )
+    assert board[0]["name"] == "Торговля"
+    assert board[0]["pnl"] == -40
+
+
+def test_blocked_real_stays_off_both_boards():
+    reals = [
+        {
+            "uid": 141917235,
+            "name": "Бан",
+            "dep": 100,
+            "pnl": 50,
+            "trading_pnl": -20,
+            "return_pct": 10,
+            "blocked": True,
+        }
+    ]
+    assert merge_nomination([], reals, "A") == []
+    assert merge_nomination([], reals, "B") == []
+
+
+def test_rank_outside_the_window_is_not_a_new_entry():
+    board = [
+        {"uid": i, "rank": i, "name": f"n{i}", "dummy": False, "dep": 1}
+        for i in range(1, 101)
+    ]
+    assert overtake_events(board[:80], board) == []
+
+
+def test_season_deposit_needs_two_points_without_a_baseline():
+    assert season_deposit_delta(1000.0, 1300.0, 1600.0) == 600.0
+    assert season_deposit_delta(None, 1300.0, 1600.0) == 300.0
+    assert season_deposit_delta(None, 1300.0, 1300.0) is None
 
 
 def test_visible_nominations_fallback_when_both_off():

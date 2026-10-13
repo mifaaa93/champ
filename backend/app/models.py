@@ -102,7 +102,7 @@ class DayLedger(Base):
     dq_reason: Mapped[str] = mapped_column(String(64), default="")
     reconcile_flag: Mapped[bool] = mapped_column(Boolean, default=False)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
 
@@ -122,6 +122,7 @@ class DayResult(Base):
     prize_amount: Mapped[Decimal] = mapped_column(Money, default=0)
     prize_note: Mapped[str] = mapped_column(String(128), default="")
     frozen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    card: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
 class AppSetting(Base):

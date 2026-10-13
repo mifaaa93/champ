@@ -17,6 +17,7 @@ DEFAULTS: dict = {
     "loss_comp_cap": 500,
     "require_trade": False,
     "prize_places": 3,
+    "settings_version": 0,
     "event_name": "PO CHAMPIONSHIP",
     "event_start": "",
     "event_end": "",
@@ -150,12 +151,54 @@ def admin_view(cfg: dict) -> dict:
     return out
 
 
+def _event_dt(value: object):
+    from datetime import datetime
+
+    from app.timezone import CHAMP_TZ
+
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=CHAMP_TZ)
+    return dt
+
+
+def assert_saved_settings(current: dict) -> None:
+    places = int(current.get("prize_places") or 0)
+    prize_yield = list(current.get("prize_yield") or [])
+    prize_loss = list(current.get("prize_loss_pct") or [])
+    if len(prize_yield) != places:
+        raise ValueError("Число призов доходности должно совпадать с числом мест")
+    if len(prize_loss) != places:
+        raise ValueError("Число процентов просадки должно совпадать с числом мест")
+    start_raw = str(current.get("event_start") or "").strip()
+    end_raw = str(current.get("event_end") or "").strip()
+    start = _event_dt(start_raw) if start_raw else None
+    end = _event_dt(end_raw) if end_raw else None
+    if start_raw and start is None:
+        raise ValueError("Дата старта: ISO, часовой пояс UTC+2")
+    if end_raw and end is None:
+        raise ValueError("Дата окончания: ISO, часовой пояс UTC+2")
+    if start and end and start >= end:
+        raise ValueError("Старт чемпионата должен быть раньше окончания")
+
+
 async def update_settings(session: AsyncSession, patch: dict) -> dict:
+    expected = patch.pop("settings_version", None)
     current = await get_settings(session)
+    if expected is not None and int(expected) != int(current.get("settings_version") or 0):
+        raise ValueError("Настройки уже изменены в другой вкладке. Обнови страницу.")
     for key, value in patch.items():
-        if key not in DEFAULTS:
+        if key not in DEFAULTS or key == "settings_version":
             continue
         current[key] = value
+    assert_saved_settings(current)
+    current["settings_version"] = int(current.get("settings_version") or 0) + 1
     row = await session.get(AppSetting, SETTINGS_KEY)
     if row is None:
         row = AppSetting(key=SETTINGS_KEY, value=current)

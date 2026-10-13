@@ -36,8 +36,8 @@ export function apiPath(path: string) {
   return `${base()}${path}`;
 }
 
-async function getJSON<T>(path: string): Promise<T> {
-  const res = await fetch(apiPath(path), { cache: "no-store" });
+async function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(apiPath(path), { cache: "no-store", signal });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || res.statusText);
@@ -47,8 +47,8 @@ async function getJSON<T>(path: string): Promise<T> {
 
 export const api = {
   meta: () => getJSON<Meta>("/public/meta"),
-  board: (nom: "yield" | "loss") =>
-    getJSON<{ day: string; rows: BoardRow[] }>(`/public/leaderboard?nomination=${nom}`),
+  board: (nom: "yield" | "loss", signal?: AbortSignal) =>
+    getJSON<{ day: string; rows: BoardRow[] }>(`/public/leaderboard?nomination=${nom}`, signal),
   archive: () => getJSON<{ days: string[] }>("/public/archive"),
   archiveDay: (day: string) =>
     getJSON<{

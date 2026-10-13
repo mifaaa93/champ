@@ -1,3 +1,4 @@
+import logging
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -59,8 +60,10 @@ async def meta(session: AsyncSession = Depends(get_session)) -> dict:
 
 
 @router.get("/event")
-async def event_page(session: AsyncSession = Depends(get_session)) -> dict:
-    return await public_event(session)
+async def event_page(
+    uid: int | None = None, session: AsyncSession = Depends(get_session)
+) -> dict:
+    return await public_event(session, uid)
 
 
 @router.get("/event/lookup/{uid}")
@@ -142,7 +145,8 @@ async def register(
         await snapshot_uid(session, part.uid)
         await refresh_statistics(session)
     except Exception:
-        pass
+        logging.getLogger("champ.public").exception("post-register refresh failed uid=%s", part.uid)
+        await session.rollback()
     return {
         "ok": True,
         "uid": part.uid,
@@ -165,8 +169,6 @@ async def lookup(uid: int, request: Request, session: AsyncSession = Depends(get
     rows = await load_rank_rows(session, day)
     y_pool = yield_pool(rows)
     min_pct = float(cfg.get("min_return_pct") or 0)
-    if min_pct > 0:
-        y_pool = [r for r in y_pool if float(r.return_pct) >= min_pct]
     l_pool = loss_pool(rows)
     top_n = int(cfg["top_n"])
     prizes = int(cfg["prize_places"])
@@ -326,8 +328,15 @@ async def trader(uid: int, session: AsyncSession = Depends(get_session)) -> dict
 
 @router.get("/archive")
 async def archive(session: AsyncSession = Depends(get_session)) -> dict:
+    from app.settings_service import job_get
+
     q = await session.execute(select(DayResult.day).distinct().order_by(DayResult.day.desc()))
     days = [str(d) for d in q.scalars()]
+    marker = await job_get(session, "day_closed")
+    for raw in marker.get("days") or []:
+        if str(raw) not in days:
+            days.append(str(raw))
+    days.sort(reverse=True)
     return {"days": days}
 
 
@@ -338,6 +347,17 @@ async def archive_day(day: date, session: AsyncSession = Depends(get_session)) -
     )
     items = q.scalars().all()
     if not items:
+        from app.settings_service import job_get
+
+        marker = await job_get(session, "day_closed")
+        if str(day) in {str(item) for item in (marker.get("days") or [])}:
+            return {
+                "day": str(day),
+                "frozen": True,
+                "frozen_at": None,
+                "winners": {"yield": [], "loss": []},
+                "empty": True,
+            }
         raise HTTPException(404, "day not frozen")
     uids = [it.uid for it in items]
     parts = {
@@ -359,25 +379,35 @@ async def archive_day(day: date, session: AsyncSession = Depends(get_session)) -
     for it in items:
         part = parts.get(it.uid)
         led = ledgers.get(it.uid)
+        card = it.card or {}
+
+        def frozen_value(key: str, live):
+            return card[key] if key in card and card[key] is not None else live
+
         grouped.setdefault(it.nomination, []).append(
             {
                 "place": it.place,
                 "uid": it.uid,
-                "nickname": part.nickname if part else "",
-                "telegram": part.telegram if part else "",
-                "country": (part.country if part else "") or "",
+                "nickname": frozen_value("nickname", part.nickname if part else ""),
+                "telegram": frozen_value("telegram", part.telegram if part else ""),
+                "country": frozen_value("country", (part.country if part else "") or ""),
                 "metric": dec(it.metric),
                 "pnl": dec(it.pnl),
                 "prize_amount": dec(it.prize_amount),
                 "prize_note": it.prize_note,
-                "balance": dec(led.last_balance) if led else None,
-                "start_balance": dec(led.start_balance) if led else None,
-                "deposits": dec(day_cash(led.day_deposits, led.stats_depo_sum)) if led else None,
-                "withdrawals": dec(day_cash(led.day_withdrawals, led.stats_wdrw_sum)) if led else None,
-                "bonuses": dec(led.day_bonuses) if led else None,
-                "return_pct": dec(led.return_pct) if led else None,
-                "trading_pnl": dec(led.trading_pnl) if led else None,
-                "trades": int(led.stats_trades) if led else None,
+                "balance": frozen_value("balance", dec(led.last_balance) if led else None),
+                "start_balance": frozen_value("start_balance", dec(led.start_balance) if led else None),
+                "deposits": frozen_value(
+                    "deposits", dec(day_cash(led.day_deposits, led.stats_depo_sum)) if led else None
+                ),
+                "withdrawals": frozen_value(
+                    "withdrawals",
+                    dec(day_cash(led.day_withdrawals, led.stats_wdrw_sum)) if led else None,
+                ),
+                "bonuses": frozen_value("bonuses", dec(led.day_bonuses) if led else None),
+                "return_pct": frozen_value("return_pct", dec(led.return_pct) if led else None),
+                "trading_pnl": frozen_value("trading_pnl", dec(led.trading_pnl) if led else None),
+                "trades": frozen_value("trades", int(led.stats_trades) if led else None),
             }
         )
     return {"day": str(day), "frozen": True, "frozen_at": frozen_at, "winners": grouped}

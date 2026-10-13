@@ -23,23 +23,31 @@ class SnapRef:
 
 
 def pick_start_snapshot(
-    snaps: list[SnapRef], min_dep: Decimal, stats_depo: Decimal
+    snaps: list[SnapRef],
+    min_dep: Decimal,
+    stats_depo: Decimal = ZERO,
+    *,
+    baseline: Decimal | None = None,
+    locked_id: int | None = None,
 ) -> SnapRef | None:
     """First snapshot that already includes today's qualifying deposit.
 
-    If the buy-in is already inside the first snapshot of the day (deposited
-    before we woke), that first snapshot is t0. If leftover capital is
-    snapshotted first, t0 moves to the first snap where cumulative deposits
-    since that opening reach min_dep.
+    `stats_depo` is not proof that the buy-in was inside the first snapshot:
+    the day total can include money that arrived later. A pre-day `baseline`
+    (lifetime deposits before today) is. Once a start id is locked, later
+    deposits do not move it. If the moment cannot be shown, return None.
     """
+    del stats_depo
     if not snaps:
         return None
-    opening = snaps[0]
+    if locked_id is not None:
+        locked = next((snap for snap in snaps if snap.id == locked_id), None)
+        if locked is not None:
+            return locked
+    base = snaps[0].sum_deposits if baseline is None else baseline
     for snap in snaps:
-        if snap.sum_deposits - opening.sum_deposits >= min_dep:
+        if snap.sum_deposits - base >= min_dep:
             return snap
-    if stats_depo >= min_dep:
-        return opening
     return None
 
 
@@ -82,18 +90,27 @@ def delta_bonuses(start: MoneyPoint, now: MoneyPoint) -> Decimal:
     return now.sum_bonuses - start.sum_bonuses
 
 
-def basis(start: MoneyPoint, now: MoneyPoint) -> Decimal:
+def basis(start: MoneyPoint, now: MoneyPoint, included: Decimal = ZERO) -> Decimal:
+    """Capital the percent is measured against.
+
+    Prefer the balance at t0. If that balance is still zero, use deposits
+    after t0, then the buy-in already inside the start snapshot. Never invent
+    a one-cent base: an unknown base stays zero and the row is not ranked.
+    """
     if start.balance > ZERO:
         return start.balance
     deposited = delta_deposits(start, now)
     if deposited > ZERO:
         return deposited
-    return MIN_BASIS
+    if included > ZERO:
+        return included
+    return ZERO
 
 
 def return_pct(pnl: Decimal, base: Decimal) -> Decimal:
-    safe = base if base > ZERO else MIN_BASIS
-    return (pnl / safe) * Decimal("100")
+    if base <= ZERO:
+        return ZERO
+    return (pnl / base) * Decimal("100")
 
 
 def loss_compensation(pnl: Decimal, percent: Decimal, cap: Decimal) -> Decimal:

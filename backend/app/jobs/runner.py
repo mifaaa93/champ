@@ -7,8 +7,8 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import DayResult, PublishLog
-from app.ledger import money
+from app.models import DayLedger, DayResult, Participant, PublishLog
+from app.ledger import money, return_pct
 from app.services.freeze import freeze_day, load_rank_rows
 from app.services.poll import refresh_statistics, snapshot_watchlist
 from app.services.ranking import loss_pool, pick_winners, yield_pool
@@ -110,9 +110,10 @@ async def telegram_board(session, day=None) -> dict:
                     "place": it.place,
                     "uid": it.uid,
                     "nickname": "",
-                    "return_pct": float(it.metric) if it.nomination == "yield" else 0,
-                    "pnl": float(it.pnl),
-                    "prize_amount": float(it.prize_amount),
+                    "metric": it.metric,
+                    "pnl": it.pnl,
+                    "prize_amount": it.prize_amount,
+                    "card": it.card or {},
                 }
             )
         source = "frozen"
@@ -126,17 +127,8 @@ async def telegram_board(session, day=None) -> dict:
             money(cfg["loss_comp_cap"]),
         )
         for nom, items in picked.items():
-            winners[nom] = [
-                {
-                    "place": item["place"],
-                    "uid": item["uid"],
-                    "nickname": item.get("nickname") or "",
-                    "return_pct": float(item.get("metric") or 0),
-                    "pnl": float(item["pnl"]),
-                    "prize_amount": float(item["prize_amount"]),
-                }
-                for item in items
-            ]
+            winners[nom] = list(items)
+    winners = await _hydrate_winners(session, day, winners)
     site = app_settings.site_public_url or ""
     return {
         "day": str(day),
@@ -148,6 +140,64 @@ async def telegram_board(session, day=None) -> dict:
         "final_yield": winners.get("yield") or [],
         "final_loss": winners.get("loss") or [],
     }
+
+
+async def _hydrate_winners(session, day, winners: dict) -> dict:
+    uids = [int(it["uid"]) for items in winners.values() for it in items]
+    parts: dict = {}
+    leds: dict = {}
+    if uids:
+        parts = {
+            p.uid: p
+            for p in (
+                await session.execute(select(Participant).where(Participant.uid.in_(uids)))
+            ).scalars()
+        }
+        leds = {
+            led.uid: led
+            for led in (
+                await session.execute(
+                    select(DayLedger).where(DayLedger.day == day, DayLedger.uid.in_(uids))
+                )
+            ).scalars()
+        }
+    out: dict[str, list] = {}
+    for nom, items in winners.items():
+        packed = []
+        for it in items:
+            uid = int(it["uid"])
+            card = it.get("card") or {}
+            part = parts.get(uid)
+            led = leds.get(uid)
+            nick = card.get("nickname") or it.get("nickname") or (part.nickname if part else "") or ""
+            if nom == "loss":
+                pct = card.get("trading_return_pct")
+                if pct is None and led is not None:
+                    pct = float(return_pct(led.trading_pnl, led.basis))
+                pnl = it.get("pnl")
+                if pnl is None and led is not None:
+                    pnl = led.trading_pnl
+            else:
+                pct = card.get("return_pct")
+                if pct is None:
+                    pct = it.get("return_pct", it.get("metric"))
+                if pct is None and led is not None:
+                    pct = led.return_pct
+                pnl = it.get("pnl")
+                if pnl is None and led is not None:
+                    pnl = led.contest_pnl
+            packed.append(
+                {
+                    "place": it["place"],
+                    "uid": uid,
+                    "nickname": nick,
+                    "return_pct": float(pct or 0),
+                    "pnl": float(pnl or 0),
+                    "prize_amount": float(it.get("prize_amount") or 0),
+                }
+            )
+        out[nom] = packed
+    return out
 
 
 async def compose_hourly(session, day=None) -> str:
@@ -182,6 +232,9 @@ async def compose_final(session, day=None) -> tuple[str, str]:
                     "place": it.place,
                     "uid": it.uid,
                     "prize_amount": it.prize_amount,
+                    "pnl": it.pnl,
+                    "metric": it.metric,
+                    "card": it.card or {},
                 }
             )
     else:
@@ -198,28 +251,32 @@ async def compose_final(session, day=None) -> tuple[str, str]:
                 {
                     "place": item["place"],
                     "uid": item["uid"],
+                    "nickname": item.get("nickname") or "",
+                    "metric": item.get("metric"),
+                    "pnl": item.get("pnl"),
                     "prize_amount": item["prize_amount"],
                 }
                 for item in items
             ]
+    winners = await _hydrate_winners(session, day, winners)
     return build_final_message(str(day), winners, cfg), source
 
 
-async def job_publish(kind: str = "hourly", day=None, force: bool = False) -> None:
+async def job_publish(kind: str = "hourly", day=None, force: bool = False) -> dict:
     async with SessionLocal() as session:
         cfg = await get_settings(session)
         now = now_dubai()
         day = day or dubai_today()
         state = await job_get(session, "publish")
-        if kind == "hourly" and now.hour == 0:
-            return
+        if kind == "hourly" and now.hour == 0 and not force:
+            return {"status": "skipped", "reason": "midnight"}
         if kind == "hourly" and not force:
             interval_m = int(cfg.get("publish_interval_minutes") or 60)
             last = state.get("last_publish_ts")
             if not last:
                 state["last_publish_ts"] = now.isoformat()
                 await job_set(session, "publish", state)
-                return
+                return {"status": "skipped", "reason": "seed"}
             if last:
                 try:
                     last_dt = datetime.fromisoformat(last)
@@ -227,11 +284,11 @@ async def job_publish(kind: str = "hourly", day=None, force: bool = False) -> No
                         last_dt = last_dt.replace(tzinfo=now.tzinfo)
                     elapsed = (now - last_dt.astimezone(now.tzinfo)).total_seconds()
                     if elapsed < interval_m * 60:
-                        return
+                        return {"status": "skipped", "reason": "interval"}
                 except ValueError:
                     pass
         if kind == "final" and not force and state.get("last_final") == str(day):
-            return
+            return {"status": "skipped", "reason": "already"}
 
         if kind == "final":
             text, _source = await compose_final(session, day)
@@ -249,8 +306,13 @@ async def job_publish(kind: str = "hourly", day=None, force: bool = False) -> No
             if force:
                 raise
             sent = False
-        if force and not sent:
-            raise TelegramSendError("Telegram не отправлен. Проверь токен бота и ID группы.")
+        if not sent:
+            state["last_fail"] = {"kind": kind, "day": str(day), "at": now.isoformat()}
+            await job_set(session, "publish", state)
+            log.error("publish %s failed", kind)
+            if force:
+                raise TelegramSendError("Telegram не отправлен. Проверь токен бота и ID группы.")
+            return {"status": "failed", "sent": False}
         session.add(
             PublishLog(
                 channel="telegram",
@@ -265,6 +327,7 @@ async def job_publish(kind: str = "hourly", day=None, force: bool = False) -> No
             state["last_publish_ts"] = now.isoformat()
         await job_set(session, "publish", state)
         log.info("publish %s sent=%s", kind, sent)
+        return {"status": "sent", "sent": True}
 
 
 async def job_freeze_and_rollover() -> None:
@@ -278,26 +341,38 @@ async def job_freeze_and_rollover() -> None:
             existing = (
                 await session.execute(select(DayResult).where(DayResult.day == day))
             ).scalars().first()
-            if existing:
+            marker = await job_get(session, "day_closed")
+            closed_empty = day.isoformat() in {str(item) for item in (marker.get("days") or [])}
+            if existing or closed_empty:
                 await job_publish("final", day=day)
 
 
 async def recover() -> None:
     async with SessionLocal() as session:
         today = dubai_today()
-        yesterday = today - timedelta(days=1)
-        y_has = (
-            await session.execute(select(DayResult).where(DayResult.day == yesterday))
-        ).scalars().first()
-        if not y_has:
-            from app.models import DayLedger
-
-            led = (
-                await session.execute(select(DayLedger).where(DayLedger.day == yesterday))
-            ).scalars().first()
-            if led:
-                log.info("recover freeze for %s", yesterday)
-                await freeze_day(session, yesterday)
+        days = (
+            await session.execute(
+                select(DayLedger.day).where(DayLedger.day < today).distinct()
+            )
+        ).scalars().all()
+        closed = set(
+            (
+                await session.execute(
+                    select(DayResult.day).where(DayResult.day < today).distinct()
+                )
+            ).scalars().all()
+        )
+        marker = await job_get(session, "day_closed")
+        marked = {str(item) for item in (marker.get("days") or [])}
+        pending = sorted(
+            day for day in set(days) if day not in closed and day.isoformat() not in marked
+        )
+        for day in pending:
+            log.info("recover freeze for %s", day)
+            result = await freeze_day(session, day)
+            if int(result.get("count") or 0) == 0:
+                marked.add(day.isoformat())
+                await job_set(session, "day_closed", {"days": sorted(marked)})
 
 
 def build_scheduler() -> AsyncIOScheduler:

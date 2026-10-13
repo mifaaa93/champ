@@ -20,6 +20,8 @@ async def register_participant(
         info = await partners_client.user_info(uid)
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail="Проверка UID временно недоступна") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Проверка UID временно недоступна") from exc
     if not info:
         raise HTTPException(
             status_code=404,

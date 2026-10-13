@@ -38,6 +38,7 @@ type Settings = {
   tg_chat_id: string;
   tg_bot_configured?: boolean;
   tg_bot_token_tail?: string;
+  settings_version?: number;
 };
 
 type BoardRow = {
@@ -102,6 +103,7 @@ const empty: Settings = {
   tg_chat_id: "",
   tg_bot_configured: false,
   tg_bot_token_tail: "",
+  settings_version: 0,
 };
 
 const NAV: { id: Tab; icon: string; label: string; group: string }[] = [
@@ -296,7 +298,7 @@ export default function AdminPage() {
     setBusy("save");
     setErr("");
     try {
-      await adminFetch("/admin/settings", "PATCH", {
+      const saved = (await adminFetch("/admin/settings", "PATCH", {
         top_n: Number(form.top_n),
         min_day_deposit: Number(form.min_day_deposit),
         publish_interval_minutes: Number(form.publish_interval_minutes),
@@ -318,16 +320,17 @@ export default function AdminPage() {
         tg_final_yield_row: form.tg_final_yield_row,
         tg_final_loss_row: form.tg_final_loss_row,
         tg_chat_id: form.tg_chat_id.trim(),
+        settings_version: Number(form.settings_version || 0),
         ...(botToken.trim() ? { tg_bot_token: botToken.trim() } : {}),
-      });
-      if (botToken.trim()) {
-        setForm((prev) => ({
-          ...prev,
-          tg_bot_configured: true,
-          tg_bot_token_tail: botToken.trim().slice(-4),
-        }));
-        setBotToken("");
-      }
+      })) as Settings;
+      setForm((prev) => ({
+        ...prev,
+        settings_version: Number(saved?.settings_version ?? prev.settings_version ?? 0),
+        ...(botToken.trim()
+          ? { tg_bot_configured: true, tg_bot_token_tail: botToken.trim().slice(-4) }
+          : {}),
+      }));
+      if (botToken.trim()) setBotToken("");
       setStatus("Сохранено. Worker подхватит на следующем цикле.");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "ошибка");
@@ -676,6 +679,9 @@ export default function AdminPage() {
               adminFetch={adminFetch}
               onStatus={setStatus}
               onError={setErr}
+              onVersion={(version) =>
+                setForm((prev) => ({ ...prev, settings_version: version }))
+              }
               section={tab === "top" ? "top" : tab === "prizes" ? "prizes" : "params"}
             />
           ) : null}

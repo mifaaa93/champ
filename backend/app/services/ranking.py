@@ -75,13 +75,13 @@ def yield_target(me: RankRow | None, pool: list[RankRow], place: int) -> dict:
         }
     rival = _at(pool, place)
     if rival is None:
-        if me and me.contest_pnl > ZERO:
+        if my_place is not None:
             return {
                 "already": True,
                 "place": my_place,
                 "need_pnl": 0.0,
                 "need_pct": 0.0,
-                "target_pct": float(me.return_pct),
+                "target_pct": float(me.return_pct) if me else 0.0,
                 "open_slot": True,
                 "occupied": occupied,
             }

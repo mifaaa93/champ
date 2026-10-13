@@ -189,9 +189,18 @@ export function EventHome() {
   const [board, setBoard] = useState<"A" | "B">("A");
 
   const load = useCallback(async () => {
-    const res = await fetch(apiPath("/public/event"), { cache: "no-store" });
+    let saved = "";
+    try {
+      saved = window.localStorage.getItem("po_champ_uid") || "";
+    } catch {
+      saved = "";
+    }
+    const q = /^\d{9,10}$/.test(saved) ? `?uid=${saved}` : "";
+    const res = await fetch(apiPath(`/public/event${q}`), { cache: "no-store" });
     if (!res.ok) throw new Error("event");
-    setData((await res.json()) as EventData);
+    const json = (await res.json()) as EventData & { you?: Profile | null };
+    setData(json);
+    if (json.you && json.you.uid) setProfile(json.you);
   }, []);
 
   useEffect(() => {
@@ -218,9 +227,6 @@ export function EventHome() {
     }
     if (!/^\d{9,10}$/.test(saved)) return;
     setUid(saved);
-    void searchUid(saved, false);
-    // Restore the saved name once, when the visitor comes back.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

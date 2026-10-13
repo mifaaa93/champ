@@ -38,7 +38,7 @@ function RegisterForm() {
     if (!/^\d{6,10}$/.test(uid.trim())) {
       next.uid = "UID — число из 6–10 цифр";
     }
-    if (nickname.trim() && !/^[\w.\- ]{1,32}$/u.test(nickname.trim())) {
+    if (nickname.trim() && !/^[\p{L}\p{N}_.\- ]{1,32}$/u.test(nickname.trim())) {
       next.nickname = "Ник: буквы, цифры, пробел, точка, _ или -";
     }
     const tgErr = telegramError(telegram, false);

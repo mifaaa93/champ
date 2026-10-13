@@ -19,22 +19,28 @@ export function Board({ initial }: { initial?: "yield" | "loss" }) {
   const [day, setDay] = useState("");
   const [err, setErr] = useState("");
 
-  async function load(next = nom) {
-    try {
-      const data = await api.board(next);
-      setRows(data.rows);
-      setDay(data.day);
-      setErr("");
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "ошибка загрузки");
-    }
-  }
-
   useEffect(() => {
-    load(nom);
-    const id = setInterval(() => load(nom), 30000);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const ctrl = new AbortController();
+    let dead = false;
+    async function run(next: "yield" | "loss") {
+      try {
+        const data = await api.board(next, ctrl.signal);
+        if (dead) return;
+        setRows(data.rows);
+        setDay(data.day);
+        setErr("");
+      } catch (e) {
+        if (dead || (e instanceof DOMException && e.name === "AbortError")) return;
+        setErr(e instanceof Error ? e.message : "ошибка загрузки");
+      }
+    }
+    void run(nom);
+    const id = setInterval(() => void run(nom), 30000);
+    return () => {
+      dead = true;
+      ctrl.abort();
+      clearInterval(id);
+    };
   }, [nom]);
 
   return (

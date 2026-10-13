@@ -6,10 +6,10 @@ from datetime import datetime, timedelta
 
 import httpx
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.ledger import money
+from app.ledger import money, return_pct
 from app.models import DayLedger, Participant, ShowcaseLead, Snapshot, Trader
 from app.partners import partners_client
 from app.schemas import dec
@@ -153,6 +153,28 @@ def season_dep_from_points(
     return max(0.0, float(last) - float(opening))
 
 
+def season_deposit_delta(
+    before: float | None,
+    earliest: float | None,
+    latest: float | None,
+) -> float | None:
+    """Season deposit visible from snapshot boundaries.
+
+    A pre-start baseline plus the last in-season snapshot is the full delta.
+    Without a baseline, only the rise between two different in-season
+    snapshots is known. One lifetime sum cannot be turned into a deposit.
+    """
+    if before is not None and latest is not None:
+        return max(0.0, float(latest) - float(before))
+    if (
+        earliest is not None
+        and latest is not None
+        and float(latest) != float(earliest)
+    ):
+        return max(0.0, float(latest) - float(earliest))
+    return None
+
+
 def nudge_amount(value: float, rng: random.Random, lo: float = 50.0, hi: float = 500_000.0) -> float:
     factor = rng.uniform(0.97, 1.07)
     return round(max(lo, min(hi, float(value) * factor)), 2)
@@ -248,6 +270,7 @@ def sort_by_loss(entries: list[dict]) -> list[dict]:
         entries,
         key=lambda r: (
             float(r.get("pnl") or 0),
+            float(r["trading_return_pct"]) if r.get("trading_return_pct") is not None else 0.0,
             1 if r.get("dummy") else 0,
             int(r.get("uid") or 0),
         ),
@@ -278,8 +301,19 @@ def merge_nomination(dummies: list[dict], reals: list[dict], board: str) -> list
         uid = int(r.get("uid") or 0)
         if uid <= 0 or uid in seen:
             continue
-        if code == "B" and float(r.get("pnl") or 0) >= 0:
+        if r.get("blocked"):
             continue
+        if code == "B":
+            shown = r.get("trading_pnl")
+            pnl = float(shown if shown is not None else r.get("pnl") or 0)
+            if pnl >= 0:
+                continue
+            ret = r.get("trading_return_pct")
+        else:
+            pnl = float(r.get("pnl") or 0)
+            if pnl <= 0:
+                continue
+            ret = r.get("return_pct")
         seen.add(uid)
         entries.append(
             {
@@ -288,8 +322,9 @@ def merge_nomination(dummies: list[dict], reals: list[dict], board: str) -> list
                 "dep": float(r.get("dep") or 0),
                 "turn": float(r.get("turn") or 0),
                 "balance": float(r.get("balance") or 0),
-                "pnl": float(r.get("pnl") or 0),
-                "return_pct": float(r.get("return_pct") or 0),
+                "pnl": pnl,
+                "return_pct": float(ret or 0),
+                "trading_return_pct": float(r.get("trading_return_pct") or 0),
                 "dummy": False,
                 "board": code,
             }
@@ -297,9 +332,16 @@ def merge_nomination(dummies: list[dict], reals: list[dict], board: str) -> list
     return sort_by_loss(entries) if code == "B" else sort_by_yield(entries)
 
 
+TRACKED_RANKS = 80
+
+
 def overtake_events(old: list[dict], new: list[dict]) -> list[dict]:
     if not old:
         return []
+    # The saved board is only the tracked window. Ranks outside it must not
+    # look like a fresh entry on every refresh.
+    old = list(old)[:TRACKED_RANKS]
+    new = [r for r in new if int(r.get("rank") or 0) <= TRACKED_RANKS]
     old_rank = {int(r["uid"]): int(r["rank"]) for r in old if r.get("uid") is not None}
     events: list[dict] = []
     for row in new:
@@ -519,7 +561,19 @@ async def list_showcase(session: AsyncSession, board: str | None = None) -> list
     return [_showcase_out(r) for r in rows]
 
 
-async def save_showcase(session: AsyncSession, rows: list[dict], board: str = "A") -> list[dict]:
+def _finite_amount(value: object, label: str):
+    try:
+        dec = money(0 if value is None or value == "" else value)
+    except Exception as exc:
+        raise HTTPException(422, f"{label}: нужно число") from exc
+    if not dec.is_finite():
+        raise HTTPException(422, f"{label}: нужно конечное число")
+    return dec
+
+
+async def save_showcase(
+    session: AsyncSession, rows: list[dict], board: str = "A", *, commit: bool = True
+) -> list[dict]:
     code = board_code(board)
     if len(rows) != 10:
         raise HTTPException(400, "Нужно ровно 10 мест витрины")
@@ -538,28 +592,39 @@ async def save_showcase(session: AsyncSession, rows: list[dict], board: str = "A
         if not name:
             raise HTTPException(400, f"Имя для места {place} пустое")
         uid = raw.get("uid")
-        uid_i = int(uid) if uid else None
+        try:
+            uid_i = int(uid) if uid else None
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(422, f"UID места {place}: нужно число") from exc
         row = existing.get(place)
         if row is None:
             row = ShowcaseLead(board=code, place=place)
             session.add(row)
         row.board = code
         row.name = name
-        row.dep = money(raw.get("dep") or 0)
-        row.turn = money(raw.get("turn") or 0)
-        row.balance = money(raw.get("balance") or 0)
-        row.pnl = money(raw.get("pnl") or 0)
-        row.return_pct = money(raw.get("return_pct") or 0)
+        row.dep = _finite_amount(raw.get("dep"), f"Депозит места {place}")
+        row.turn = _finite_amount(raw.get("turn"), f"Оборот места {place}")
+        row.balance = _finite_amount(raw.get("balance"), f"Баланс места {place}")
+        row.pnl = _finite_amount(raw.get("pnl"), f"Прибыль места {place}")
+        row.return_pct = _finite_amount(raw.get("return_pct"), f"Доходность места {place}")
         row.uid = uid_i
         row.randomize = bool(raw.get("randomize", True))
-    await session.commit()
+    await session.flush()
+    if commit:
+        await session.commit()
     return await list_showcase(session, code)
 
 
-async def public_event(session: AsyncSession) -> dict:
+async def public_event(session: AsyncSession, uid: int | None = None) -> dict:
     cfg = await get_settings(session)
     start, end = event_bounds(cfg)
-    board_a, board_b, live = await refresh_event_boards(session)
+    state = await job_get(session, "event_live")
+    if state.get("ranks_a") is None or state.get("ranks_b") is None:
+        await refresh_event_boards(session)
+        state = await job_get(session, "event_live")
+    board_a = list(state.get("ranks_a") or [])
+    board_b = list(state.get("ranks_b") or [])
+    live = list(state.get("activity") or [])
     now = now_champ().timestamp()
     show_a, show_b = visible_nominations(cfg)
     visible = []
@@ -570,6 +635,23 @@ async def public_event(session: AsyncSession) -> dict:
     players, deposits, turnover = combined_totals(visible)
     top_a = _public_top(board_a)
     top_b = _public_top(board_b)
+    you = None
+    if uid:
+        you = _dual_profile(board_a, board_b, uid, players)
+        if you is None:
+            me = next((r for r in await real_entries(session) if int(r["uid"]) == int(uid)), None)
+            if me and (me.get("name") or "").strip():
+                you = _unranked_profile(
+                    uid,
+                    me["name"],
+                    float(me["dep"]),
+                    float(me["turn"]),
+                    min_event_deposit(cfg),
+                    len(board_a),
+                    float(me.get("balance") or 0),
+                    float(me.get("pnl") or 0),
+                    float(me.get("return_pct") or 0),
+                )
     return {
         "name": cfg.get("event_name") or "PO CHAMPIONSHIP",
         "event_start": start.isoformat(),
@@ -590,6 +672,7 @@ async def public_event(session: AsyncSession) -> dict:
         "top_b": top_b,
         "top": top_a if show_a else top_b,
         "metrics": await day_metrics(session, cfg),
+        "you": you,
     }
 
 
@@ -600,11 +683,7 @@ async def day_metrics(session: AsyncSession, cfg: dict) -> dict:
     day = champ_today()
     rows = await load_rank_rows(session, day)
     top_n = int(cfg.get("top_n") or 7)
-    min_pct = float(cfg.get("min_return_pct") or 0)
-    y_all = yield_pool(rows)
-    if min_pct > 0:
-        y_all = [r for r in y_all if float(r.return_pct) >= min_pct]
-    y = y_all[:top_n]
+    y = yield_pool(rows)[:top_n]
     loss = loss_pool(rows)[:top_n]
 
     def pack(seq, *, is_loss: bool = False) -> list[dict]:
@@ -663,6 +742,34 @@ async def _snaps_at_or_before(
     return {s.uid: s for s in rows}
 
 
+async def _first_snap_between(
+    session: AsyncSession, uids: list[int], start: datetime, end: datetime
+) -> dict[int, Snapshot]:
+    if not uids:
+        return {}
+    sub = (
+        select(Snapshot.uid, func.min(Snapshot.ts).label("ts"))
+        .where(Snapshot.uid.in_(uids), Snapshot.ts > start, Snapshot.ts <= end)
+        .group_by(Snapshot.uid)
+        .subquery()
+    )
+    rows = (
+        await session.execute(
+            select(Snapshot).join(
+                sub, (Snapshot.uid == sub.c.uid) & (Snapshot.ts == sub.c.ts)
+            )
+        )
+    ).scalars().all()
+    return {s.uid: s for s in rows}
+
+
+def _season_cache_ok(raw: dict, start: datetime, end: datetime) -> bool:
+    return (
+        raw.get("from") == start.date().isoformat()
+        and raw.get("end") == end.date().isoformat()
+    )
+
+
 async def refresh_season_statistics(session: AsyncSession) -> dict:
     cfg = await get_settings(session)
     start, end = event_bounds(cfg)
@@ -670,8 +777,16 @@ async def refresh_season_statistics(session: AsyncSession) -> dict:
     if through < start.date():
         through = start.date()
     payload = await partners_client.statistics_range(start.date().isoformat(), through.isoformat())
+    old = await job_get(session, "event_season")
+    if payload.get("truncated"):
+        log.error("season statistics truncated; previous cache kept")
+        return {"skipped": True, "reason": "truncated"}
+    rows = payload.get("data")
+    if not rows and _season_cache_ok(old, start, end) and old.get("by_uid"):
+        log.error("season statistics empty; previous cache kept")
+        return {"skipped": True, "reason": "empty"}
     by_uid: dict[str, float] = {}
-    for row in payload.get("data") or []:
+    for row in rows or []:
         try:
             uid = int(row.get("group1"))
         except (TypeError, ValueError):
@@ -679,6 +794,7 @@ async def refresh_season_statistics(session: AsyncSession) -> dict:
         by_uid[str(uid)] = float(row.get("depo_sum") or 0)
     state = {
         "from": start.date().isoformat(),
+        "end": end.date().isoformat(),
         "through": through.isoformat(),
         "by_uid": by_uid,
     }
@@ -690,11 +806,13 @@ async def real_entries(session: AsyncSession) -> list[dict]:
     cfg = await get_settings(session)
     start, end = event_bounds(cfg)
     through = min(now_champ(), end)
-    cache = (await job_get(session, "event_season")).get("by_uid") or {}
+    raw_cache = await job_get(session, "event_season")
+    cache = raw_cache.get("by_uid") or {} if _season_cache_ok(raw_cache, start, end) else {}
     parts = (await session.execute(select(Participant))).scalars().all()
     uids = [p.uid for p in parts]
-    snaps = await _latest_snaps(session, uids)
     opens = await _snaps_at_or_before(session, uids, start)
+    closes = await _snaps_at_or_before(session, uids, through)
+    firsts = await _first_snap_between(session, uids, start, through)
     traders = {}
     if parts:
         traders = {
@@ -719,23 +837,27 @@ async def real_entries(session: AsyncSession) -> list[dict]:
         }
     entries = []
     for p in parts:
-        snap = snaps.get(p.uid)
+        close = closes.get(p.uid)
+        first = firsts.get(p.uid)
+        opening = opens.get(p.uid)
         trader = traders.get(p.uid)
         led = ledgers.get(p.uid)
-        info = (trader.last_user_info if trader else None) or (snap.raw if snap else None) or {}
+        info = (trader.last_user_info if trader else None) or (close.raw if close else None) or {}
         stats_dep = float(cache.get(str(p.uid)) or cache.get(p.uid) or 0)
-        points: list[tuple[datetime, float]] = []
-        opening = opens.get(p.uid)
-        if opening:
-            points.append((opening.ts, float(opening.sum_deposits)))
-        if snap:
-            points.append((snap.ts, float(snap.sum_deposits)))
-        snap_dep = season_dep_from_points(points, start, through)
-        dep = max(stats_dep, snap_dep)
+        snap_dep = season_deposit_delta(
+            float(opening.sum_deposits) if opening else None,
+            float(first.sum_deposits) if first else None,
+            float(close.sum_deposits) if close else None,
+        )
+        dep = stats_dep if snap_dep is None else max(stats_dep, snap_dep)
         turn = turnover_from_info(info if isinstance(info, dict) else None)
         pnl = float(led.contest_pnl) if led else 0.0
-        balance = float(led.last_balance) if led else (float(snap.balance) if snap else 0.0)
+        trading = float(led.trading_pnl) if led else 0.0
+        balance = float(led.last_balance) if led else (float(close.balance) if close else 0.0)
         ret = float(led.return_pct) if led else 0.0
+        trading_ret = float(return_pct(led.trading_pnl, led.basis)) if led else 0.0
+        status = (led.status or "").strip().lower() if led else ""
+        blocked = bool(led and (led.self_excluded or (status and status != "active")))
         entries.append(
             {
                 "uid": p.uid,
@@ -744,9 +866,12 @@ async def real_entries(session: AsyncSession) -> list[dict]:
                 "turn": turn,
                 "balance": balance,
                 "pnl": pnl,
+                "trading_pnl": trading,
                 "return_pct": ret,
+                "trading_return_pct": trading_ret,
+                "blocked": blocked,
                 "dummy": False,
-                "in_ranking": dep >= min_dep,
+                "in_ranking": dep >= min_dep and not blocked,
             }
         )
     return entries
@@ -830,8 +955,34 @@ def _scope_events(events: list[dict], board: str) -> list[dict]:
     return [{**ev, "scope": scope} for ev in events]
 
 
+def _rank_rows(board: list[dict]) -> list[dict]:
+    return [
+        {
+            "uid": r["uid"],
+            "name": r["name"],
+            "dep": r.get("dep") or 0,
+            "turn": r.get("turn") or 0,
+            "balance": r.get("balance") or 0,
+            "pnl": r.get("pnl") or 0,
+            "return_pct": r.get("return_pct") or 0,
+            "rank": r["rank"],
+            "dummy": bool(r.get("dummy")),
+        }
+        for r in board
+    ]
+
+
+async def _lock_event(session: AsyncSession) -> None:
+    conn = await session.connection()
+    if conn.dialect.name != "postgresql":
+        return
+    await session.execute(text("SELECT pg_advisory_xact_lock(814201)"))
+
+
 async def refresh_event_boards(session: AsyncSession) -> tuple[list[dict], list[dict], list[dict]]:
     board_a, board_b = await ranked_boards(session)
+    await _lock_event(session)
+    session.expire_all()
     state = await job_get(session, "event_live")
     fresh = "board_a" not in state
     old_a = state.get("board_a") or ([] if fresh else state.get("board") or [])
@@ -848,7 +999,13 @@ async def refresh_event_boards(session: AsyncSession) -> tuple[list[dict], list[
     await job_set(
         session,
         "event_live",
-        {"board_a": _slim_board(board_a), "board_b": _slim_board(board_b), "activity": live},
+        {
+            "board_a": _slim_board(board_a),
+            "board_b": _slim_board(board_b),
+            "ranks_a": _rank_rows(board_a),
+            "ranks_b": _rank_rows(board_b),
+            "activity": live,
+        },
     )
     return board_a, board_b, live
 
@@ -997,6 +1154,8 @@ async def lookup_event_uid(session: AsyncSession, uid: int) -> dict:
         info = await partners_client.user_info(uid)
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail="Проверка UID временно недоступна") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Проверка UID временно недоступна") from exc
     if not info:
         return {"uid": uid, "status": "not_in_base"}
 
@@ -1011,7 +1170,8 @@ async def lookup_event_uid(session: AsyncSession, uid: int) -> dict:
 
         await snapshot_uid(session, uid)
     except Exception:
-        pass
+        log.exception("event snapshot failed uid=%s", uid)
+        await session.rollback()
     cfg = await get_settings(session)
     min_dep = min_event_deposit(cfg)
     board_a, board_b, _live = await refresh_event_boards(session)
@@ -1061,30 +1221,35 @@ async def register_event_name(
     part = (
         await session.execute(select(Participant).where(Participant.uid == uid))
     ).scalar_one_or_none()
-    try:
-        info = await partners_client.user_info(uid)
-    except httpx.HTTPError:
-        info = None
-    if part is None:
-        part = Participant(
-            uid=uid,
-            nickname=nick,
-            telegram=tg,
-            country=(info or {}).get("country") if isinstance(info, dict) else None,
-        )
-        session.add(part)
+    # A public repeat must not rewrite a name or contact that is already saved.
+    if part is not None and (part.nickname or "").strip():
+        nick = part.nickname
     else:
-        part.nickname = nick
-        if tg:
-            part.telegram = tg
-    await session.commit()
+        try:
+            info = await partners_client.user_info(uid)
+        except (httpx.HTTPError, RuntimeError):
+            info = None
+        if part is None:
+            part = Participant(
+                uid=uid,
+                nickname=nick,
+                telegram=tg,
+                country=(info or {}).get("country") if isinstance(info, dict) else None,
+            )
+            session.add(part)
+        else:
+            part.nickname = nick
+            if tg and not (part.telegram or "").strip():
+                part.telegram = tg
+        await session.commit()
 
     try:
         from app.services.poll import snapshot_uid
 
         await snapshot_uid(session, uid)
     except Exception:
-        pass
+        log.exception("event snapshot failed uid=%s", uid)
+        await session.rollback()
 
     cfg = await get_settings(session)
     min_dep = min_event_deposit(cfg)
