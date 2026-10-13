@@ -150,6 +150,18 @@ export default function AdminPage() {
   const [botToken, setBotToken] = useState("");
 
   useEffect(() => {
+    if (!status) return;
+    const id = window.setTimeout(() => setStatus(""), 3500);
+    return () => window.clearTimeout(id);
+  }, [status]);
+
+  useEffect(() => {
+    if (!err) return;
+    const id = window.setTimeout(() => setErr(""), 3500);
+    return () => window.clearTimeout(id);
+  }, [err]);
+
+  useEffect(() => {
     const saved = sessionStorage.getItem(TOKEN_KEY);
     if (saved) {
       setToken(saved);
