@@ -417,8 +417,8 @@ export function EventHome() {
     setModal("share");
   }
 
-  async function copyShareText() {
-    const value = `${shareText} ${shareUrl}`.trim();
+  async function copyShareUrl() {
+    const value = shareUrl;
     let copied = false;
     try {
       if (navigator.clipboard?.writeText) {
@@ -895,7 +895,7 @@ export function EventHome() {
             <label htmlFor="share-url">Ссылка приглашения</label>
             <div className="share-link-row">
               <input id="share-url" value={shareUrl} readOnly onFocus={(e) => e.currentTarget.select()} />
-              <button type="button" onClick={() => void copyShareText()}>
+              <button type="button" onClick={() => void copyShareUrl()}>
                 {shareCopied ? "Скопировано" : "Копировать"}
               </button>
             </div>
