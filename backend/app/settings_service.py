@@ -74,6 +74,10 @@ async def get_settings(session: AsyncSession) -> dict:
         if isinstance(value, str) and "Dubai" in value:
             merged[key] = value.replace("Asia/Dubai", "UTC+2").replace("Dubai", "UTC+2")
             changed = True
+    old_turnover_rule = "Оборот учитывается за последние 30 дней активности, если данные есть в базе."
+    if old_turnover_rule in (merged.get("event_rules") or []):
+        merged["event_rules"] = [rule for rule in merged["event_rules"] if rule != old_turnover_rule]
+        changed = True
     if not str(merged.get("event_end") or "").strip():
         from datetime import timedelta
 
