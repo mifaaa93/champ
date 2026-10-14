@@ -46,7 +46,6 @@ type BoardRow = {
   place: number;
   name: string;
   dep: number;
-  turn: number;
   pnl?: number;
   return_pct?: number;
   dummy?: boolean;
@@ -58,7 +57,6 @@ type PublicEvent = {
   prize_pool: number;
   stats_players: number;
   stats_deposits?: number;
-  stats_turnover: number;
   top: BoardRow[];
   top_a?: BoardRow[];
   top_b?: BoardRow[];
@@ -154,10 +152,10 @@ export default function AdminPage() {
   const [botToken, setBotToken] = useState("");
   const [statistics, setStatistics] = useState<{
     mode: string;
-    real: { players: number; deposits: number; turnover: number };
-    display: { players: number; deposits: number; turnover: number };
+    real: { players: number; deposits: number };
+    display: { players: number; deposits: number };
   } | null>(null);
-  const [statsDraft, setStatsDraft] = useState({ players: 0, deposits: 0, turnover: 0 });
+  const [statsDraft, setStatsDraft] = useState({ players: 0, deposits: 0 });
 
   useEffect(() => {
     if (!status) return;
@@ -504,7 +502,6 @@ export default function AdminPage() {
               <th>UID</th>
               <th>Имя</th>
               <th>Депозит</th>
-              <th>Оборот</th>
               <th>Прибыль</th>
               <th>Доходность</th>
             </tr>
@@ -512,7 +509,7 @@ export default function AdminPage() {
           <tbody>
             {list.length === 0 ? (
               <tr>
-                <td colSpan={7} className="note-dim">
+                <td colSpan={6} className="note-dim">
                   Пока пусто
                 </td>
               </tr>
@@ -523,7 +520,6 @@ export default function AdminPage() {
                   <td className="uid-cell">{row.dummy ? "HIDDEN" : row.uid || "—"}</td>
                   <td className="name-cell">{row.name}</td>
                   <td>{money(row.dep)}</td>
-                  <td>{money(row.turn)}</td>
                   <td className={(row.pnl || 0) >= 0 ? "profit-cell" : "loss-cell"}>{money(row.pnl || 0)}</td>
                   <td className={(row.return_pct || 0) >= 0 ? "profit-cell" : "loss-cell"}>
                     {(row.return_pct || 0) >= 0 ? "+" : ""}
@@ -718,11 +714,11 @@ export default function AdminPage() {
           <div className="page-header"><div><h1 className="page-title">Статистика чемпионата</h1>
             <p className="page-subtitle">Реальный подсчёт или заданная стартовая точка с дальнейшим прибавлением изменений</p></div></div>
           {statistics && <div className="card">
-            <p>Реальные значения: {statistics.real.players} участников · {money(statistics.real.deposits)} депозитов · {money(statistics.real.turnover)} оборот</p>
+            <p>Реальные значения: {statistics.real.players} участников · {money(statistics.real.deposits)} депозитов</p>
             <div className="form-row">
-              {(["players", "deposits", "turnover"] as const).map((key) => (
+              {(["players", "deposits"] as const).map((key) => (
                 <div className="form-group" key={key}>
-                  <label className="form-label">{({ players: "Участники", deposits: "Депозиты $", turnover: "Оборот $" })[key]}</label>
+                  <label className="form-label">{({ players: "Участники", deposits: "Депозиты $" })[key]}</label>
                   <input className="form-input" type="number" min={0} value={statsDraft[key]}
                     onChange={(e) => setStatsDraft({ ...statsDraft, [key]: Number(e.target.value) })} />
                 </div>

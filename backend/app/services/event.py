@@ -57,7 +57,6 @@ def _seed_row(place: int, name: str, dep: float, turn: float, pnl: float) -> dic
         "place": place,
         "name": name,
         "dep": dep,
-        "turn": turn,
         "pnl": pnl,
         "balance": dep + pnl,
         "return_pct": round((pnl / dep) * 100, 2) if dep else 0,
@@ -308,12 +307,12 @@ def merge_nomination(dummies: list[dict], reals: list[dict], board: str) -> list
         if code == "B":
             shown = r.get("trading_pnl")
             pnl = float(shown if shown is not None else r.get("pnl") or 0)
-            if pnl >= 0:
+            if pnl >= 0 and not r.get("force_nomination"):
                 continue
             ret = r.get("trading_return_pct")
         else:
             pnl = float(r.get("pnl") or 0)
-            if pnl <= 0:
+            if pnl <= 0 and not r.get("force_nomination"):
                 continue
             ret = r.get("return_pct")
         seen.add(uid)
@@ -495,8 +494,11 @@ def combined_totals(boards: list[list[dict]]) -> tuple[int, float, float]:
     return players, deposits, turnover
 
 
-def real_totals(boards: list[list[dict]]) -> tuple[int, float, float]:
-    return combined_totals([[row for row in board if not row.get("dummy")] for board in boards])
+def real_totals(boards: list[list[dict]]) -> tuple[int, float]:
+    players, deposits, _turnover = combined_totals(
+        [[row for row in board if not row.get("dummy")] for board in boards]
+    )
+    return players, deposits
 
 
 def activity_time_label(ts: float, now: float) -> str:
@@ -537,7 +539,6 @@ def _showcase_out(row: ShowcaseLead) -> dict:
         "place": row.place,
         "name": row.name,
         "dep": dec(row.dep),
-        "turn": dec(row.turn),
         "balance": dec(getattr(row, "balance", 0)),
         "pnl": dec(getattr(row, "pnl", 0)),
         "return_pct": dec(getattr(row, "return_pct", 0)),
@@ -627,7 +628,7 @@ async def save_showcase(
         row.board = code
         row.name = name
         row.dep = _finite_amount(raw.get("dep"), f"Депозит места {place}")
-        row.turn = _finite_amount(raw.get("turn"), f"Оборот места {place}")
+        row.turn = money(0)
         row.balance = _finite_amount(raw.get("balance"), f"Баланс места {place}")
         row.pnl = _finite_amount(raw.get("pnl"), f"Прибыль места {place}")
         row.return_pct = _finite_amount(raw.get("return_pct"), f"Доходность места {place}")
@@ -657,12 +658,11 @@ async def public_event(session: AsyncSession, uid: int | None = None) -> dict:
         visible.append(board_a)
     if show_b:
         visible.append(board_b)
-    players, deposits, turnover = real_totals(visible)
+    players, deposits = real_totals(visible)
     if cfg.get("stats_mode") == "editable":
         offset = cfg.get("stats_offset") or {}
         players = max(0, players + int(offset.get("players") or 0))
         deposits = max(0.0, deposits + float(offset.get("deposits") or 0))
-        turnover = max(0.0, turnover + float(offset.get("turnover") or 0))
     top_a = _public_top(board_a, int(cfg.get("top_visible") or 10))
     top_b = _public_top(board_b, int(cfg.get("top_visible") or 10))
     you = None
@@ -675,7 +675,6 @@ async def public_event(session: AsyncSession, uid: int | None = None) -> dict:
                     uid,
                     me["name"],
                     float(me["dep"]),
-                    float(me["turn"]),
                     min_event_deposit(cfg),
                     len(board_a),
                     float(me.get("balance") or 0),
@@ -687,14 +686,17 @@ async def public_event(session: AsyncSession, uid: int | None = None) -> dict:
         "event_start": start.isoformat(),
         "event_end": end.isoformat(),
         "min_deposit": min_event_deposit(cfg),
+        "top_visible": int(cfg.get("top_visible") or 10),
         "prize_pool": float(cfg.get("prize_pool") or 0),
         "prize_table": cfg.get("prize_table") or [],
         "stats_players": players,
         "stats_deposits": deposits,
-        "stats_turnover": turnover,
         "telegram_channel_url": cfg.get("telegram_channel_url") or "",
         "rami_url": cfg.get("rami_url") or "",
-        "rules": cfg.get("event_rules") or [],
+        "rules": [
+            rule for rule in (cfg.get("event_rules") or [])
+            if rule != "Оборот учитывается за последние 30 дней активности, если данные есть в базе."
+        ],
         "activity": _format_activity(live, now),
         "show_a": show_a,
         "show_b": show_b,
@@ -872,7 +874,6 @@ async def real_entries(session: AsyncSession) -> list[dict]:
         opening = opens.get(p.uid)
         trader = traders.get(p.uid)
         led = ledgers.get(p.uid)
-        info = (trader.last_user_info if trader else None) or (close.raw if close else None) or {}
         stats_dep = float(cache.get(str(p.uid)) or cache.get(p.uid) or 0)
         snap_dep = season_deposit_delta(
             float(opening.sum_deposits) if opening else None,
@@ -880,7 +881,8 @@ async def real_entries(session: AsyncSession) -> list[dict]:
             float(close.sum_deposits) if close else None,
         )
         dep = stats_dep if snap_dep is None else max(stats_dep, snap_dep)
-        turn = turnover_from_info(info if isinstance(info, dict) else None)
+        # Partners API does not provide a reliable turnover value for this contest.
+        turn = 0.0
         pnl = float(led.contest_pnl) if led else 0.0
         trading = float(led.trading_pnl) if led else 0.0
         balance = float(led.last_balance) if led else (float(close.balance) if close else 0.0)
@@ -927,6 +929,8 @@ async def ranked_boards(session: AsyncSession) -> tuple[list[dict], list[dict]]:
         for real in reals:
             override = configured.get(real["uid"])
             copy = dict(real)
+            if override and override.pinned_place is not None:
+                copy["force_nomination"] = True
             if override and override.frozen:
                 copy.update(override.values or {})
                 if board == "B":
@@ -971,11 +975,6 @@ async def tick_showcase(session: AsyncSession, rng: random.Random | None = None)
         mutated = False
         if rng.random() < 0.6:
             row.dep = money(nudge_amount(float(row.dep), rng))
-            mutated = True
-        if rng.random() < 0.55:
-            lo = max(50.0, float(row.dep) * 8)
-            hi = max(lo + 1, float(row.dep) * 80)
-            row.turn = money(nudge_amount(float(row.turn) or lo, rng, lo=lo, hi=min(hi, 20_000_000)))
             mutated = True
         if rng.random() < 0.5:
             current = abs(float(getattr(row, "pnl", 0) or 800))
@@ -1023,7 +1022,6 @@ def _rank_rows(board: list[dict]) -> list[dict]:
             "uid": r["uid"],
             "name": r["name"],
             "dep": r.get("dep") or 0,
-            "turn": r.get("turn") or 0,
             "balance": r.get("balance") or 0,
             "pnl": r.get("pnl") or 0,
             "return_pct": r.get("return_pct") or 0,
@@ -1087,7 +1085,6 @@ def _public_top(board: list[dict], limit: int = 10) -> list[dict]:
                 "uid": None if r.get("dummy") else r["uid"],
                 "name": r["name"],
                 "dep": r["dep"],
-                "turn": r.get("turn") or 0,
                 "balance": r.get("balance") or 0,
                 "pnl": pnl,
                 "loss": max(0.0, -pnl),
@@ -1148,7 +1145,6 @@ def _profile_payload(ranked: list[dict], uid: int, stats_players: int | None = N
         "name": me["name"],
         "rank": me["rank"],
         "dep": me["dep"],
-        "turn": me["turn"],
         "balance": me.get("balance") or 0,
         "pnl": me.get("pnl") or 0,
         "return_pct": me.get("return_pct") or 0,
@@ -1164,7 +1160,6 @@ def _unranked_profile(
     uid: int,
     name: str,
     dep: float,
-    turn: float,
     min_dep: float,
     total: int,
     balance: float = 0.0,
@@ -1176,7 +1171,6 @@ def _unranked_profile(
         "name": name,
         "rank": 0,
         "dep": dep,
-        "turn": turn,
         "balance": balance,
         "pnl": pnl,
         "return_pct": return_pct,
@@ -1185,6 +1179,7 @@ def _unranked_profile(
         "neighbors": [],
         "in_ranking": False,
         "need_deposit": max(0.0, min_dep - dep),
+        "ranking_reason": "need_deposit" if dep < min_dep else "waiting_result",
         "rank_a": 0,
         "rank_b": 0,
     }
@@ -1254,7 +1249,6 @@ async def lookup_event_uid(session: AsyncSession, uid: int) -> dict:
         uid,
         me["name"],
         float(me["dep"]),
-        float(me["turn"]),
         min_dep,
         len(board_a),
         float(me.get("balance") or 0),
@@ -1263,7 +1257,7 @@ async def lookup_event_uid(session: AsyncSession, uid: int) -> dict:
     )
     return {
         "uid": uid,
-        "status": "need_deposit",
+        "status": "need_deposit" if you["need_deposit"] > 0 else "waiting_result",
         "min_deposit": min_dep,
         "need_deposit": you["need_deposit"],
         "you": you,
@@ -1321,12 +1315,10 @@ async def register_event_name(
     if profile is None:
         me = next((r for r in await real_entries(session) if int(r["uid"]) == int(uid)), None)
         dep = float(me["dep"]) if me else 0.0
-        turn = float(me["turn"]) if me else 0.0
         profile = _unranked_profile(
             uid,
             nick,
             dep,
-            turn,
             min_dep,
             len(board_a),
             float(me.get("balance") or 0) if me else 0.0,
@@ -1335,7 +1327,7 @@ async def register_event_name(
         )
         return {
             "uid": uid,
-            "status": "need_deposit",
+            "status": "need_deposit" if profile["need_deposit"] > 0 else "waiting_result",
             "min_deposit": min_dep,
             "need_deposit": profile["need_deposit"],
             "you": profile,

@@ -63,6 +63,15 @@ def test_hidden_dummy_does_not_take_place():
     assert [r["rank"] for r in ranked] == [1, 2]
 
 
+def test_pinned_real_can_enter_yield_board_without_positive_pnl():
+    board = merge_nomination(
+        [{"place": 1, "name": "demo", "dep": 100, "pnl": 50, "return_pct": 50}],
+        [{"uid": 123456789, "name": "real", "dep": 10454, "pnl": 0, "return_pct": 0, "force_nomination": True}],
+        "A",
+    )
+    assert any(row["uid"] == 123456789 for row in board)
+
+
 def test_neighbor_window_includes_self():
     ranked = sort_by_dep(
         [{"uid": i, "name": str(i), "dep": 100 - i} for i in range(1, 8)]

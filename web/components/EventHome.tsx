@@ -12,7 +12,6 @@ type TopRow = {
   uid?: number | null;
   name: string;
   dep: number;
-  turn: number;
   pnl?: number;
   loss?: number;
   return_pct?: number;
@@ -26,7 +25,6 @@ type Profile = {
   name: string;
   rank: number;
   dep: number;
-  turn: number;
   balance?: number;
   pnl?: number;
   return_pct?: number;
@@ -35,6 +33,7 @@ type Profile = {
   neighbors: Neighbor[];
   in_ranking?: boolean;
   need_deposit?: number;
+  ranking_reason?: "need_deposit" | "waiting_result";
   rank_a?: number;
   rank_b?: number;
 };
@@ -45,8 +44,8 @@ type EventData = {
   prize_pool: number;
   prize_table: PrizeRow[];
   stats_players: number;
+  top_visible?: number;
   stats_deposits?: number;
-  stats_turnover: number;
   telegram_channel_url: string;
   rami_url: string;
   rules: string[];
@@ -274,6 +273,7 @@ export function EventHome() {
   const rami = data?.rami_url || "https://t.me/rami_username";
   const channel = data?.telegram_channel_url || "https://t.me/your_channel";
   const minDep = data?.min_deposit || 50;
+  const topLimit = data?.top_visible || 10;
   const shareUrl =
     typeof window !== "undefined" && profile ? `${window.location.origin}/?ref=${profile.uid}` : "";
   const shareRank =
@@ -333,7 +333,7 @@ export function EventHome() {
         return;
       }
       const you = (body as { you?: Profile }).you;
-      if ((st === "ok" || st === "need_deposit") && you) {
+      if ((st === "ok" || st === "need_deposit" || st === "waiting_result") && you) {
         await applyProfile(you, st, scroll);
         return;
       }
@@ -438,10 +438,6 @@ export function EventHome() {
             <div className="stat-val deposit">{money(row.dep)}</div>
           </div>
           <div className="stat-box">
-            <div className="stat-label-small">Оборот</div>
-            <div className="stat-val turnover">{money(row.turn)}</div>
-          </div>
-          <div className="stat-box">
             <div className="stat-label-small">{onLoss ? "Потеря" : "Прибыль"}</div>
             <div className={`stat-val ${onLoss || pnl < 0 ? "loss" : "profit"}`}>
               {money(onLoss ? loss : pnl)}
@@ -526,7 +522,7 @@ export function EventHome() {
           </div>
           <div className="live-stat">
             <div className="live-stat-value" style={{ color: "var(--neon-gold)" }}>
-              Топ-10
+              Топ-{topLimit}
             </div>
             <div className="live-stat-label">Глубина рейтинга</div>
           </div>
@@ -553,7 +549,7 @@ export function EventHome() {
         ) : null}
 
         <h2 className="section-title">
-          {activeBoard === "B" ? "ТОП-10 ПО ПОТЕРЯМ" : "ТОП-10 ПО ДОХОДНОСТИ"}
+          {activeBoard === "B" ? `ТОП-${topLimit} ПО ПОТЕРЯМ` : `ТОП-${topLimit} ПО ДОХОДНОСТИ`}
         </h2>
         {showA && showB ? (
           <div className="board-switch">
@@ -581,7 +577,6 @@ export function EventHome() {
             <div>Трейдер</div>
             <div style={{ textAlign: "right" }}>{activeBoard === "B" ? "Потеря" : "Доходность"}</div>
             <div style={{ textAlign: "right" }}>Депозит</div>
-            <div style={{ textAlign: "right" }}>Оборот</div>
             <div style={{ textAlign: "right" }}>{activeBoard === "B" ? "Доходность" : "Прибыль"}</div>
           </div>
           {top3.rest.map((row) => (
@@ -597,7 +592,6 @@ export function EventHome() {
                 {activeBoard === "B" ? money(row.loss || Math.max(0, -(row.pnl || 0))) : pct(row.return_pct || 0)}
               </div>
               <div className="row-val deposit">{money(row.dep)}</div>
-              <div className="row-val turnover">{money(row.turn)}</div>
               <div className={`row-val ${activeBoard === "B" ? ((row.return_pct || 0) >= 0 ? "profit" : "loss") : "profit"}`}>
                 {activeBoard === "B" ? pct(row.return_pct || 0) : money(Math.max(0, row.pnl || 0))}
               </div>
@@ -695,11 +689,16 @@ export function EventHome() {
             <div className="welcome-msg">
               Привет, <span>{profile.name}</span>! 👋
             </div>
-            {profile.in_ranking === false ? (
+            {profile.in_ranking === false && profile.ranking_reason === "need_deposit" ? (
               <div className="need-banner">
                 Чтобы попасть в рейтинг сезона, нужен депозит от ${minDep} с начала таймера. Сейчас{" "}
                 {money(profile.dep)}
                 {profile.need_deposit ? `, осталось ${money(profile.need_deposit)}` : ""}.
+              </div>
+            ) : null}
+            {profile.in_ranking === false && profile.ranking_reason !== "need_deposit" ? (
+              <div className="need-banner">
+                Депозит для участия внесён. Пока нет результата по доходности или потерям; место появится после расчёта.
               </div>
             ) : null}
             <div className="stats-card">

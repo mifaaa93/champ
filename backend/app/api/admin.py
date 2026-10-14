@@ -114,12 +114,11 @@ class RealLeadPatch(BaseModel):
     pinned_place: int | None = Field(default=None, ge=1, le=20)
     name: str | None = Field(default=None, min_length=1, max_length=64)
     dep: float | None = Field(default=None, ge=0)
-    turn: float | None = Field(default=None, ge=0)
     balance: float | None = Field(default=None, ge=0)
     pnl: float | None = None
     return_pct: float | None = None
 
-    @field_validator("dep", "turn", "balance", "pnl", "return_pct")
+    @field_validator("dep", "balance", "pnl", "return_pct")
     @classmethod
     def finite(cls, value: float | None) -> float | None:
         if value is not None and not math.isfinite(value):
@@ -169,9 +168,8 @@ class StatisticsPatch(BaseModel):
     mode: str
     players: int = Field(ge=0, le=10_000_000)
     deposits: float = Field(ge=0, le=10_000_000_000)
-    turnover: float = Field(ge=0, le=10_000_000_000)
 
-    @field_validator("deposits", "turnover")
+    @field_validator("deposits")
     @classmethod
     def finite(cls, value: float) -> float:
         if not math.isfinite(value):
@@ -191,7 +189,7 @@ async def _live_statistics(session: AsyncSession) -> tuple[int, float, float]:
 
 def statistics_display(cfg: dict, actual: tuple[int, float, float]) -> dict:
     offset = cfg.get("stats_offset") or {}
-    keys = ("players", "deposits", "turnover")
+    keys = ("players", "deposits")
     return {
         key: max(0, value + float(offset.get(key) or 0)) if cfg.get("stats_mode") == "editable" else value
         for key, value in zip(keys, actual)
@@ -206,7 +204,7 @@ async def get_statistics(session: AsyncSession = Depends(get_session)) -> dict:
     actual = await _live_statistics(session)
     return {
         "mode": cfg.get("stats_mode", "real"),
-        "real": dict(zip(("players", "deposits", "turnover"), actual)),
+        "real": dict(zip(("players", "deposits"), actual)),
         "display": statistics_display(cfg, actual),
     }
 
@@ -218,8 +216,8 @@ async def patch_statistics(body: StatisticsPatch, session: AsyncSession = Depend
     if body.mode not in {"real", "editable"}:
         raise HTTPException(422, "Режим: real или editable")
     actual = await _live_statistics(session)
-    target = (body.players, body.deposits, body.turnover)
-    offset = {key: desired - current for key, desired, current in zip(("players", "deposits", "turnover"), target, actual)}
+    target = (body.players, body.deposits)
+    offset = {key: desired - current for key, desired, current in zip(("players", "deposits"), target, actual)}
     saved = await update_settings(session, {"stats_mode": body.mode, "stats_offset": offset})
     return {**await get_statistics(session), "settings_version": saved["settings_version"]}
 

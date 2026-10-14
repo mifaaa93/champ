@@ -9,7 +9,6 @@ type ShowcaseRow = {
   place: number;
   name: string;
   dep: number;
-  turn: number;
   balance: number;
   pnl: number;
   return_pct: number;
@@ -23,7 +22,6 @@ type RealRow = {
   board: BoardKey;
   name: string;
   dep: number;
-  turn: number;
   balance: number;
   pnl: number;
   return_pct: number;
@@ -95,7 +93,6 @@ function emptyRow(place: number): ShowcaseRow {
     place,
     name: "",
     dep: 50,
-    turn: 0,
     balance: 0,
     pnl: 0,
     return_pct: 0,
@@ -271,7 +268,6 @@ export function EventPanel({
       place: r.place,
       name: r.name,
       dep: Number(r.dep),
-      turn: Number(r.turn),
       balance: Number(r.balance),
       pnl: Number(r.pnl),
       return_pct: Number(r.return_pct),
@@ -320,7 +316,6 @@ export function EventPanel({
         ...(realEdit.frozen ? {
           name: realEdit.override.name ?? realEdit.name,
           dep: realEdit.override.dep ?? realEdit.dep,
-          turn: realEdit.override.turn ?? realEdit.turn,
           balance: realEdit.override.balance ?? realEdit.balance,
           pnl: realEdit.override.pnl ?? realEdit.pnl,
           return_pct: realEdit.override.return_pct ?? realEdit.return_pct,
@@ -380,7 +375,7 @@ export function EventPanel({
           <p className="form-hint" style={{ margin: "0 0 12px" }}>
             {lossBoard
               ? "Рандомизация держит прибыль отрицательной, чтобы строка оставалась в топе потерь."
-              : "Рандомизация держит прибыль положительной. Карандаш правит имя, депозит, оборот, прибыль и доходность."}
+              : "Рандомизация держит прибыль положительной. Карандаш правит имя, депозит, прибыль и доходность."}
           </p>
           <div className="table-container">
             <table className="data-table">
@@ -470,7 +465,7 @@ export function EventPanel({
                 <input className="form-input" type="number" min={1} max={20} value={realEdit.pinned_place ?? ""}
                   onChange={(e) => setRealEdit({ ...realEdit, pinned_place: e.target.value ? Number(e.target.value) : null })} />
               </div>
-              {realEdit.frozen && (["name", "dep", "turn", "balance", "pnl", "return_pct"] as const).map((key) => (
+              {realEdit.frozen && (["name", "dep", "balance", "pnl", "return_pct"] as const).map((key) => (
                 <div className="form-group" key={key}>
                   <label className="form-label">{key}</label>
                   <input className="form-input" type={key === "name" ? "text" : "number"} step={key === "name" ? undefined : "any"}
@@ -542,18 +537,8 @@ export function EventPanel({
                   />
                 </div>
               </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">Оборот ($)</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    value={edit.turn}
-                    onChange={(e) => setEdit({ ...edit, turn: Number(e.target.value) })}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">{lossBoard ? "Прибыль ($), для потерь со знаком −" : "Прибыль ($)"}</label>
+              <div className="form-group">
+                <label className="form-label">{lossBoard ? "Прибыль ($), для потерь со знаком −" : "Прибыль ($)"}</label>
                   <input
                     className="form-input"
                     type="number"
@@ -561,7 +546,6 @@ export function EventPanel({
                     onChange={(e) => setEdit({ ...edit, pnl: Number(e.target.value) })}
                   />
                 </div>
-              </div>
               <div className="form-group">
                 <label className="form-label">Доходность (%)</label>
                 <input
