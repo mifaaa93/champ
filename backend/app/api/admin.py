@@ -177,17 +177,13 @@ class StatisticsPatch(BaseModel):
         return value
 
 
-async def _live_statistics(session: AsyncSession) -> tuple[int, float, float]:
-    from app.services.event import real_totals, ranked_boards, visible_nominations
-    from app.settings_service import get_settings
+async def _live_statistics(session: AsyncSession) -> tuple[int, float]:
+    from app.services.event import eligible_real_totals, real_entries
 
-    cfg = await get_settings(session)
-    a, b = await ranked_boards(session)
-    show_a, show_b = visible_nominations(cfg)
-    return real_totals([board for board, visible in ((a, show_a), (b, show_b)) if visible])
+    return eligible_real_totals(await real_entries(session))
 
 
-def statistics_display(cfg: dict, actual: tuple[int, float, float]) -> dict:
+def statistics_display(cfg: dict, actual: tuple[int, float]) -> dict:
     offset = cfg.get("stats_offset") or {}
     keys = ("players", "deposits")
     return {

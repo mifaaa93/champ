@@ -12,6 +12,7 @@ from app.services.freeze import load_rank_rows
 from app.ledger import money as to_money
 from app.services.ranking import loss_pool, loss_target, yield_pool, yield_target
 from app.services.event import invite_preview, lookup_event_uid, public_event, register_event_name
+from app.services.history import day_history_summary
 from app.services.register import register_participant
 from app.schemas import EventRegisterIn, RegisterIn, day_cash, dec, row_out
 from app.settings_service import get_settings
@@ -42,12 +43,9 @@ async def trader_history(
     participation_days = set(
         (await session.execute(select(DayLedger.day).where(DayLedger.uid == uid, DayLedger.registered.is_(True)))).scalars().all()
     )
-    days = participation_days | {item.day for item in results}
     return {
         "uid": uid,
-        "championships": len(days),
-        "wins": sum(item.place == 1 for item in results),
-        "usdt": round(sum(float(item.prize_amount or 0) for item in results), 2),
+        **day_history_summary(results, participation_days),
         "results": [
             {
                 "day": str(item.day),

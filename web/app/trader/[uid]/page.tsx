@@ -17,7 +17,7 @@ export default async function TraderPage({
   const backHref = from === "admin" ? "/admin#participants" : "/";
   const backLabel = from === "admin" ? "← К участникам" : "← К чемпионату";
   let data: TraderPayload | null = null;
-  let history: { championships: number; wins: number; usdt: number; results: { day: string; nomination: string; place: number; pnl: number; usdt: number }[] } | null = null;
+  let history: { participation_days: number; daily_first_places: number; daily_prizes_usdt: number; results: { day: string; nomination: string; place: number; pnl: number; usdt: number }[] } | null = null;
   try {
     data = (await api.trader(uid)) as TraderPayload;
   } catch {
@@ -47,8 +47,8 @@ export default async function TraderPage({
           </>
         )}
         {history && <div className="profile-panel">
-          <h3>История UID</h3>
-          <p className="note">Чемпионатов: {history.championships} · побед: {history.wins} · призы: {history.usdt.toFixed(2)} USDT</p>
+          <h3>Дневная история UID</h3>
+          <p className="note">Дней участия: {history.participation_days} · первых мест в дневных номинациях: {history.daily_first_places} · дневные призы: {history.daily_prizes_usdt.toFixed(2)} USDT</p>
           {history.results.map((item, i) => <p className="note" key={`${item.day}-${i}`}>
             {item.day} · {item.nomination === "yield" ? "Доходность" : "Просадка"} · #{item.place} · PnL ${item.pnl.toFixed(2)} · {item.usdt.toFixed(2)} USDT
           </p>)}

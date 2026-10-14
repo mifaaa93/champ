@@ -1,5 +1,8 @@
 from datetime import datetime, timedelta, timezone
+from datetime import date
+from decimal import Decimal
 import random
+from types import SimpleNamespace
 
 from app.services.event import (
     board_totals,
@@ -10,6 +13,7 @@ from app.services.event import (
     merge_board,
     merge_nomination,
     place_pinned,
+    eligible_real_totals,
     min_event_deposit,
     neighbor_window,
     nudge_amount,
@@ -50,6 +54,45 @@ def test_pinned_real_keeps_place_when_dummies_reorder():
         assert result[2]["uid"] == 123456789
         assert sorted(r["uid"] for r in result) == [-3, -2, -1, 123456789]
         assert [r["rank"] for r in result] == [1, 2, 3, 4]
+
+
+def test_pinned_real_keeps_place_when_board_has_too_few_rows():
+    from app.services.event import _public_top
+
+    single = [{"uid": 123456789, "name": "real", "dep": 100, "dummy": False}]
+    assert place_pinned(single, {123456789: 4}) == [{**single[0], "rank": 4}]
+    two = [{"uid": -1, "dummy": True}, *single]
+    assert [row["rank"] for row in place_pinned(two, {123456789: 4})] == [1, 4]
+    assert place_pinned(single, {123456789: 1})[0]["rank"] == 1
+    assert _public_top(place_pinned(single, {123456789: 4}), limit=3) == []
+    assert _public_top(place_pinned(single, {123456789: 4}), limit=4)[0]["place"] == 4
+
+
+def test_real_statistics_include_eligible_traders_without_nomination_result():
+    entries = [
+        {"uid": 123456789, "dep": 70, "pnl": 0, "in_ranking": True},
+        {"uid": 123456790, "dep": 90, "pnl": 10, "in_ranking": True},
+        {"uid": 123456791, "dep": 25, "pnl": 5, "in_ranking": False},
+    ]
+    assert eligible_real_totals(entries) == (2, 160)
+    assert eligible_real_totals([]) == (0, 0)
+
+
+def test_uid_history_counts_days_not_championships():
+    from app.services.history import day_history_summary
+
+    first = date(2026, 10, 11)
+    second = date(2026, 10, 12)
+    results = [
+        SimpleNamespace(day=first, place=1, prize_amount=Decimal("100")),
+        SimpleNamespace(day=first, place=2, prize_amount=Decimal("50")),
+        SimpleNamespace(day=second, place=1, prize_amount=Decimal("75")),
+    ]
+    assert day_history_summary(results, {first, second, date(2026, 10, 13)}) == {
+        "participation_days": 3,
+        "daily_first_places": 2,
+        "daily_prizes_usdt": 225.0,
+    }
 
 
 def test_hidden_dummy_does_not_take_place():

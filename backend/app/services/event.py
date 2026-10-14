@@ -334,20 +334,23 @@ def merge_nomination(dummies: list[dict], reals: list[dict], board: str) -> list
 
 
 def place_pinned(ordered: list[dict], pins: dict[int, int]) -> list[dict]:
-    """Reserve explicit real-lead places; everyone else competes for free slots."""
+    """Keep pinned places even when there are too few entrants to fill preceding slots."""
     reserved: dict[int, dict] = {}
     rest: list[dict] = []
     for row in ordered:
         place = pins.get(int(row["uid"])) if not row.get("dummy") else None
-        if place is not None and 0 < place <= len(ordered) and place not in reserved:
+        if place is not None and place > 0 and place not in reserved:
             reserved[place] = row
         else:
             rest.append(row)
-    output: list[dict] = []
-    for place in range(1, len(ordered) + 1):
-        output.append(reserved.get(place) or rest.pop(0))
-    # Pins beyond the current board size are deliberately inactive until enough entrants exist.
-    return _stamp_ranks(output)
+    positions = dict(reserved)
+    place = 1
+    for row in rest:
+        while place in positions:
+            place += 1
+        positions[place] = row
+        place += 1
+    return [{**row, "rank": rank} for rank, row in sorted(positions.items())]
 
 
 TRACKED_RANKS = 80
@@ -499,6 +502,12 @@ def real_totals(boards: list[list[dict]]) -> tuple[int, float]:
         [[row for row in board if not row.get("dummy")] for board in boards]
     )
     return players, deposits
+
+
+def eligible_real_totals(entries: list[dict]) -> tuple[int, float]:
+    """Statistics of registered, deposit-qualified traders, independent of either nomination."""
+    eligible = {int(row["uid"]): row for row in entries if row.get("in_ranking")}
+    return len(eligible), sum(float(row.get("dep") or 0) for row in eligible.values())
 
 
 def activity_time_label(ts: float, now: float) -> str:
@@ -653,12 +662,8 @@ async def public_event(session: AsyncSession, uid: int | None = None) -> dict:
     live = list(state.get("activity") or [])
     now = now_champ().timestamp()
     show_a, show_b = visible_nominations(cfg)
-    visible = []
-    if show_a:
-        visible.append(board_a)
-    if show_b:
-        visible.append(board_b)
-    players, deposits = real_totals(visible)
+    real = await real_entries(session)
+    players, deposits = eligible_real_totals(real)
     if cfg.get("stats_mode") == "editable":
         offset = cfg.get("stats_offset") or {}
         players = max(0, players + int(offset.get("players") or 0))
@@ -669,7 +674,7 @@ async def public_event(session: AsyncSession, uid: int | None = None) -> dict:
     if uid:
         you = _dual_profile(board_a, board_b, uid, players)
         if you is None:
-            me = next((r for r in await real_entries(session) if int(r["uid"]) == int(uid)), None)
+            me = next((r for r in real if int(r["uid"]) == int(uid)), None)
             if me and (me.get("name") or "").strip():
                 you = _unranked_profile(
                     uid,
@@ -1077,7 +1082,9 @@ async def refresh_event_board(session: AsyncSession) -> tuple[list[dict], list[d
 
 def _public_top(board: list[dict], limit: int = 10) -> list[dict]:
     out = []
-    for r in board[:limit]:
+    for r in board:
+        if int(r["rank"]) > limit:
+            break
         pnl = float(r.get("pnl") or 0)
         out.append(
             {
