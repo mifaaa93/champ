@@ -15,6 +15,7 @@ type TopRow = {
   loss?: number;
   return_pct?: number;
   dummy?: boolean;
+  is_you?: boolean;
 };
 type Activity = { name: string; action: string; rank?: number | null; extra?: string; time?: string; scope?: string };
 type Neighbor = { rank: number; uid: number; name: string; dep: number; is_you: boolean; dummy?: boolean };
@@ -427,7 +428,7 @@ export function EventHome() {
         <div className="avatar-wrapper">
           <div className="initials-avatar">{row.name.charAt(0).toUpperCase()}</div>
         </div>
-        <div className="bot-name">{row.name}</div>
+        <div className="bot-name">{row.name}{row.is_you ? " · Это вы" : ""}</div>
         <div className="bot-rank">{rankText}</div>
         <div className="bot-stats">
           <div className="stat-box">
@@ -581,9 +582,8 @@ export function EventHome() {
               <div className="row-rank">{row.place}</div>
               <div>
                 <div className="row-name">
-                  {row.name}
+                  {row.name}{row.is_you ? " · Это вы" : ""}
                 </div>
-                <div className="row-id">{row.dummy === false ? "LIVE" : "ID: HIDDEN"}</div>
               </div>
               <div className={`row-val ${activeBoard === "B" ? "loss" : (row.return_pct || 0) >= 0 ? "profit" : "loss"}`}>
                 {activeBoard === "B" ? money(row.loss || Math.max(0, -(row.pnl || 0))) : pct(row.return_pct || 0)}
