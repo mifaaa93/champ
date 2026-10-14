@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, type BoardRow } from "@/lib/api";
 
@@ -61,7 +60,7 @@ export function Board({ initial }: { initial?: "yield" | "loss" }) {
         <thead>
           <tr>
             <th>#</th>
-            <th>UID</th>
+            <th>Участник</th>
             <th>Баланс</th>
             <th>PnL</th>
             <th>%</th>
@@ -77,11 +76,9 @@ export function Board({ initial }: { initial?: "yield" | "loss" }) {
             </tr>
           ) : (
             rows.map((r) => (
-              <tr key={r.uid}>
+              <tr key={r.place}>
                 <td>{r.place}</td>
-                <td className="mono">
-                  <Link href={`/trader/${r.uid}`}>{r.nickname || r.uid}</Link>
-                </td>
+                <td className="mono">{r.nickname || "Участник"}</td>
                 <td className="mono">${r.balance.toFixed(2)}</td>
                 <td className={`mono ${r.pnl >= 0 ? "up" : "down"}`}>{money(r.pnl)}</td>
                 <td className={`mono ${r.return_pct >= 0 ? "up" : "down"}`}>{pct(r.return_pct)}</td>

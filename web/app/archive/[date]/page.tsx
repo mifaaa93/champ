@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Nav } from "@/components/Nav";
 import { api } from "@/lib/api";
 
@@ -30,7 +29,6 @@ function when(iso?: string | null) {
 
 type Winner = {
   place: number;
-  uid: number;
   nickname?: string;
   telegram?: string;
   country?: string;
@@ -52,10 +50,9 @@ function WinnerCard({ w, kind }: { w: Winner; kind: "yield" | "loss" }) {
   return (
     <article className="card" style={{ marginBottom: 12 }}>
       <h3>
-        {w.place} место · {w.nickname || w.uid}
+        {w.place} место · {w.nickname || "Участник"}
       </h3>
       <p className="mono">
-        UID <Link href={`/trader/${w.uid}`}>{w.uid}</Link>
         {w.telegram ? ` · @${w.telegram}` : ""}
         {w.country ? ` · ${w.country}` : ""}
       </p>
@@ -113,7 +110,7 @@ export default async function ArchiveDayPage({ params }: { params: Promise<{ dat
           {(data.winners.yield || []).length === 0 ? (
             <p className="note">Нет призовых мест.</p>
           ) : (
-            (data.winners.yield || []).map((w) => <WinnerCard key={w.uid} w={w} kind="yield" />)
+            (data.winners.yield || []).map((w) => <WinnerCard key={`yield-${w.place}`} w={w} kind="yield" />)
           )}
         </div>
         <div>
@@ -121,7 +118,7 @@ export default async function ArchiveDayPage({ params }: { params: Promise<{ dat
           {(data.winners.loss || []).length === 0 ? (
             <p className="note">Нет призовых мест.</p>
           ) : (
-            (data.winners.loss || []).map((w) => <WinnerCard key={w.uid} w={w} kind="loss" />)
+            (data.winners.loss || []).map((w) => <WinnerCard key={`loss-${w.place}`} w={w} kind="loss" />)
           )}
         </div>
       </div>
@@ -129,3 +126,4 @@ export default async function ArchiveDayPage({ params }: { params: Promise<{ dat
     </>
   );
 }
+import Link from "next/link";

@@ -14,7 +14,6 @@ export type Meta = {
 
 export type BoardRow = {
   place: number;
-  uid: number;
   nickname: string;
   balance: number;
   pnl: number;

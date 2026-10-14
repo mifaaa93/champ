@@ -14,6 +14,7 @@ from app.services.event import (
     merge_nomination,
     place_pinned,
     eligible_real_totals,
+    event_totals,
     min_event_deposit,
     neighbor_window,
     nudge_amount,
@@ -76,6 +77,18 @@ def test_real_statistics_include_eligible_traders_without_nomination_result():
     ]
     assert eligible_real_totals(entries) == (2, 160)
     assert eligible_real_totals([]) == (0, 0)
+
+
+def test_event_totals_adds_configured_dummies_and_real_accounts():
+    boards = [
+        [{"dummy": True, "dep": 100}, {"dummy": True, "dep": 200}],
+        [{"dummy": True, "dep": 300}],
+    ]
+    real = [
+        {"uid": 1, "dep": 50, "in_ranking": True},
+        {"uid": 2, "dep": 25, "in_ranking": False},
+    ]
+    assert event_totals(boards, real) == (4, 650)
 
 
 def test_uid_history_counts_days_not_championships():

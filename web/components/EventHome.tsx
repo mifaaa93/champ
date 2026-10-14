@@ -9,7 +9,6 @@ import "@/app/event.css";
 type PrizeRow = { place: string; amount: number; suffix?: string };
 type TopRow = {
   place: number;
-  uid?: number | null;
   name: string;
   dep: number;
   pnl?: number;
@@ -428,9 +427,7 @@ export function EventHome() {
         <div className="avatar-wrapper">
           <div className="initials-avatar">{row.name.charAt(0).toUpperCase()}</div>
         </div>
-        <div className="bot-name">
-          {row.uid ? <a href={`/trader/${row.uid}`}>{row.name} · UID {row.uid}</a> : row.name}
-        </div>
+        <div className="bot-name">{row.name}</div>
         <div className="bot-rank">{rankText}</div>
         <div className="bot-stats">
           <div className="stat-box">
@@ -584,7 +581,7 @@ export function EventHome() {
               <div className="row-rank">{row.place}</div>
               <div>
                 <div className="row-name">
-                  {row.uid ? <a href={`/trader/${row.uid}`}>{row.name} · UID {row.uid}</a> : row.name}
+                  {row.name}
                 </div>
                 <div className="row-id">{row.dummy === false ? "LIVE" : "ID: HIDDEN"}</div>
               </div>

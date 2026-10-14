@@ -505,9 +505,19 @@ def real_totals(boards: list[list[dict]]) -> tuple[int, float]:
 
 
 def eligible_real_totals(entries: list[dict]) -> tuple[int, float]:
-    """Statistics of registered, deposit-qualified traders, independent of either nomination."""
+    """Statistics of registered, deposit-qualified traders."""
     eligible = {int(row["uid"]): row for row in entries if row.get("in_ranking")}
     return len(eligible), sum(float(row.get("dep") or 0) for row in eligible.values())
+
+
+def event_totals(boards: list[list[dict]], entries: list[dict]) -> tuple[int, float]:
+    """Count configured demo slots plus eligible real traders, without double-counting reals."""
+    dummy_count = sum(1 for board in boards for row in board if row.get("dummy"))
+    dummy_deposits = sum(
+        float(row.get("dep") or 0) for board in boards for row in board if row.get("dummy")
+    )
+    real_count, real_deposits = eligible_real_totals(entries)
+    return dummy_count + real_count, dummy_deposits + real_deposits
 
 
 def activity_time_label(ts: float, now: float) -> str:
@@ -663,7 +673,8 @@ async def public_event(session: AsyncSession, uid: int | None = None) -> dict:
     now = now_champ().timestamp()
     show_a, show_b = visible_nominations(cfg)
     real = await real_entries(session)
-    players, deposits = eligible_real_totals(real)
+    visible_boards = [board for board, visible in ((board_a, show_a), (board_b, show_b)) if visible]
+    players, deposits = event_totals(visible_boards, real)
     if cfg.get("stats_mode") == "editable":
         offset = cfg.get("stats_offset") or {}
         players = max(0, players + int(offset.get("players") or 0))
@@ -1089,7 +1100,6 @@ def _public_top(board: list[dict], limit: int = 10) -> list[dict]:
         out.append(
             {
                 "place": r["rank"],
-                "uid": None if r.get("dummy") else r["uid"],
                 "name": r["name"],
                 "dep": r["dep"],
                 "balance": r.get("balance") or 0,
@@ -1140,7 +1150,7 @@ def _profile_payload(ranked: list[dict], uid: int, stats_players: int | None = N
         neighbors.append(
             {
                 "rank": row["rank"],
-                "uid": 0 if dummy else row["uid"],
+                "uid": 0,
                 "name": row["name"],
                 "dep": row["dep"],
                 "dummy": dummy,

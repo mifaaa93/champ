@@ -294,7 +294,6 @@ async def leaderboard(
     for i, r in enumerate(top, 1):
         item = {
             "place": i,
-            "uid": r.uid,
             "nickname": r.nickname,
             "balance": dec(r.last_balance),
             "pnl": dec(r.trading_pnl if nomination == "loss" else r.contest_pnl),
@@ -420,7 +419,6 @@ async def archive_day(day: date, session: AsyncSession = Depends(get_session)) -
         grouped.setdefault(it.nomination, []).append(
             {
                 "place": it.place,
-                "uid": it.uid,
                 "nickname": frozen_value("nickname", part.nickname if part else ""),
                 "telegram": frozen_value("telegram", part.telegram if part else ""),
                 "country": frozen_value("country", (part.country if part else "") or ""),
