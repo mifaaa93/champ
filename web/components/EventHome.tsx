@@ -417,6 +417,32 @@ export function EventHome() {
     setModal("share");
   }
 
+  async function copyShareText() {
+    const value = `${shareText} ${shareUrl}`.trim();
+    let copied = false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        copied = true;
+      }
+    } catch {
+      copied = false;
+    }
+    if (!copied) {
+      const area = document.createElement("textarea");
+      area.value = value;
+      area.setAttribute("readonly", "");
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+      copied = document.execCommand("copy");
+      area.remove();
+    }
+    setShareCopied(copied);
+    window.setTimeout(() => setShareCopied(false), 2500);
+  }
+
   function card(row: TopRow | undefined, cls: string, rankText: string, crown: boolean) {
     if (!row) return null;
     const pnl = row.pnl || 0;
@@ -865,6 +891,15 @@ export function EventHome() {
         <div className="modal" onClick={(e) => e.stopPropagation()}>
           <h2>Поделиться</h2>
           <p>Отправь ссылку другу — он увидит твоё место и сможет соревноваться с тобой.</p>
+          <div className="share-link-box">
+            <label htmlFor="share-url">Ссылка приглашения</label>
+            <div className="share-link-row">
+              <input id="share-url" value={shareUrl} readOnly onFocus={(e) => e.currentTarget.select()} />
+              <button type="button" onClick={() => void copyShareText()}>
+                {shareCopied ? "Скопировано" : "Копировать"}
+              </button>
+            </div>
+          </div>
           <div className="share-sheet">
             <a
               href={`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`}
@@ -880,19 +915,18 @@ export function EventHome() {
             >
               WhatsApp
             </a>
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(`${shareText} ${shareUrl}`);
-                  setShareCopied(true);
-                } catch {
-                  setShareCopied(false);
-                }
-              }}
-            >
-              {shareCopied ? "Скопировано" : "Копировать"}
-            </button>
+            <a href={`https://vk.com/share.php?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer">
+              VK
+            </a>
+            <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noreferrer">
+              Facebook
+            </a>
+            <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noreferrer">
+              X / Twitter
+            </a>
+            <a href={`mailto:?subject=${encodeURIComponent(data?.name || "Чемпионат")}&body=${encodeURIComponent(`${shareText}\n${shareUrl}`)}`}>
+              Email
+            </a>
           </div>
           <button type="button" className="modal-btn" onClick={() => setModal(null)}>
             ЗАКРЫТЬ
