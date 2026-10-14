@@ -660,7 +660,9 @@ async def save_showcase(
     return await list_showcase(session, code)
 
 
-async def public_event(session: AsyncSession, uid: int | None = None) -> dict:
+async def public_event(
+    session: AsyncSession, uid: int | None = None, ref_uid: int | None = None
+) -> dict:
     cfg = await get_settings(session)
     start, end = event_bounds(cfg)
     state = await job_get(session, "event_live")
@@ -679,8 +681,8 @@ async def public_event(session: AsyncSession, uid: int | None = None) -> dict:
         offset = cfg.get("stats_offset") or {}
         players = max(0, players + int(offset.get("players") or 0))
         deposits = max(0.0, deposits + float(offset.get("deposits") or 0))
-    top_a = _public_top(board_a, int(cfg.get("top_visible") or 10), uid)
-    top_b = _public_top(board_b, int(cfg.get("top_visible") or 10), uid)
+    top_a = _public_top(board_a, int(cfg.get("top_visible") or 10), uid, ref_uid)
+    top_b = _public_top(board_b, int(cfg.get("top_visible") or 10), uid, ref_uid)
     you = None
     if uid:
         you = _dual_profile(board_a, board_b, uid, players)
@@ -1091,7 +1093,12 @@ async def refresh_event_board(session: AsyncSession) -> tuple[list[dict], list[d
     return board_a, live
 
 
-def _public_top(board: list[dict], limit: int = 10, viewer_uid: int | None = None) -> list[dict]:
+def _public_top(
+    board: list[dict],
+    limit: int = 10,
+    viewer_uid: int | None = None,
+    friend_uid: int | None = None,
+) -> list[dict]:
     out = []
     for r in board:
         if int(r["rank"]) > limit:
@@ -1108,6 +1115,7 @@ def _public_top(board: list[dict], limit: int = 10, viewer_uid: int | None = Non
                 "return_pct": r.get("return_pct") or 0,
                 "dummy": bool(r.get("dummy")),
                 "is_you": bool(viewer_uid and not r.get("dummy") and int(r["uid"]) == int(viewer_uid)),
+                "is_friend": bool(friend_uid and not r.get("dummy") and int(r["uid"]) == int(friend_uid)),
             }
         )
     return out

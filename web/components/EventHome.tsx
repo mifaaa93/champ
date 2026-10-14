@@ -16,6 +16,7 @@ type TopRow = {
   return_pct?: number;
   dummy?: boolean;
   is_you?: boolean;
+  is_friend?: boolean;
 };
 type Activity = { name: string; action: string; rank?: number | null; extra?: string; time?: string; scope?: string };
 type Neighbor = { rank: number; uid: number; name: string; dep: number; is_you: boolean; dummy?: boolean };
@@ -195,7 +196,10 @@ export function EventHome() {
     } catch {
       saved = "";
     }
-    const q = /^\d{9,10}$/.test(saved) ? `?uid=${saved}` : "";
+    const query = new URLSearchParams();
+    if (/^\d{9,10}$/.test(saved)) query.set("uid", saved);
+    if (/^\d{9,10}$/.test(refUid)) query.set("ref", refUid);
+    const q = query.toString() ? `?${query.toString()}` : "";
     const res = await fetch(apiPath(`/public/event${q}`), { cache: "no-store" });
     if (!res.ok) throw new Error("event");
     const json = (await res.json()) as EventData & { you?: Profile | null };
@@ -454,7 +458,7 @@ export function EventHome() {
         <div className="avatar-wrapper">
           <div className="initials-avatar">{row.name.charAt(0).toUpperCase()}</div>
         </div>
-        <div className="bot-name">{row.name}{row.is_you ? " · Это вы" : ""}</div>
+        <div className="bot-name">{row.name}{row.is_you ? " · Это вы" : row.is_friend ? " · Это ваш друг" : ""}</div>
         <div className="bot-rank">{rankText}</div>
         <div className="bot-stats">
           <div className="stat-box">
@@ -608,7 +612,7 @@ export function EventHome() {
               <div className="row-rank">{row.place}</div>
               <div>
                 <div className="row-name">
-                  {row.name}{row.is_you ? " · Это вы" : ""}
+                  {row.name}{row.is_you ? " · Это вы" : row.is_friend ? " · Это ваш друг" : ""}
                 </div>
               </div>
               <div className={`row-val ${activeBoard === "B" ? "loss" : (row.return_pct || 0) >= 0 ? "profit" : "loss"}`}>

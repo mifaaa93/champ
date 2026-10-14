@@ -94,9 +94,11 @@ async def meta(session: AsyncSession = Depends(get_session)) -> dict:
 
 @router.get("/event")
 async def event_page(
-    uid: int | None = None, session: AsyncSession = Depends(get_session)
+    uid: int | None = None,
+    ref: int | None = Query(default=None),
+    session: AsyncSession = Depends(get_session),
 ) -> dict:
-    return await public_event(session, uid)
+    return await public_event(session, uid, ref)
 
 
 @router.get("/event/lookup/{uid}")
