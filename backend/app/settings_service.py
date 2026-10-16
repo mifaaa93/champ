@@ -38,6 +38,7 @@ DEFAULTS: dict = {
     "stats_mode": "real",
     "stats_offset": {"players": 0, "deposits": 0},
     "top_visible": 10,
+    "activity_visible": 6,
     "tg_bot_token": "",
     "tg_chat_id": "",
     "telegram_channel_url": "https://t.me/your_channel",

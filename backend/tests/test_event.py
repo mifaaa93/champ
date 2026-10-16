@@ -252,6 +252,18 @@ def test_deposit_activity_keeps_amount_out_of_the_place():
     assert rows[0]["scope"] == "B"
 
 
+def test_activity_feed_limit_is_independent_of_ranking_depth():
+    from app.services.event import _format_activity
+
+    events = [
+        {"name": f"Участник {i}", "action": "вошёл в турнир", "ts": 100}
+        for i in range(12)
+    ]
+    assert len(_format_activity(events, 100)) == 6
+    assert len(_format_activity(events, 100, 3)) == 3
+    assert len(_format_activity(events, 100, 12)) == 12
+
+
 def test_dummy_live_events_on_name_and_dep():
     old = merge_board(
         [{"place": 1, "name": "Ахмед", "dep": 1000, "turn": 0}, {"place": 2, "name": "Тимур", "dep": 800, "turn": 0}],

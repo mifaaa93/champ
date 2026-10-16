@@ -47,6 +47,7 @@ type EventForm = {
   loss_comp_cap: number;
   prize_places: number;
   top_visible: number;
+  activity_visible: number;
   show_nomination_a: boolean;
   show_nomination_b: boolean;
   settings_version: number;
@@ -183,6 +184,7 @@ export function EventPanel({
           event_rules: ((s.event_rules as string[]) || []).join("\n"),
           prize_places,
           top_visible: Number(s.top_visible || 10),
+          activity_visible: Number(s.activity_visible ?? 6),
           prize_yield,
           prize_loss_pct,
           loss_comp_cap: Number(s.loss_comp_cap || 0),
@@ -248,6 +250,7 @@ export function EventPanel({
               show_nomination_a: form.show_nomination_a,
               show_nomination_b: form.show_nomination_b,
               top_visible: form.top_visible,
+              activity_visible: form.activity_visible,
             };
       const saved = (await adminFetch("/admin/settings", "PATCH", body)) as { settings_version?: number };
       if (saved && saved.settings_version != null) {
@@ -801,6 +804,12 @@ export function EventPanel({
             <label className="form-label">Строк в публичном списке (3–80)</label>
             <input className="form-input" type="number" min={3} max={80} value={form.top_visible}
               onChange={(e) => setForm({ ...form, top_visible: Number(e.target.value) })} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Событий в ленте на сайте (1–20)</label>
+            <input className="form-input" type="number" min={1} max={20} value={form.activity_visible}
+              onChange={(e) => setForm({ ...form, activity_visible: Number(e.target.value) })} />
+            <div className="form-hint">Отдельная настройка для ленты «Последние действия»; не меняет размер рейтинга.</div>
           </div>
           <h3>⚡ Интервал обновления данных</h3>
           <div className="form-group">

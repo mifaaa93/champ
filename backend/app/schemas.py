@@ -90,6 +90,7 @@ class SettingsPatch(BaseModel):
     prize_table: list[dict] | None = None
     stats_players: int | None = Field(default=None, ge=0, le=10_000_000)
     top_visible: int | None = Field(default=None, ge=3, le=80)
+    activity_visible: int | None = Field(default=None, ge=1, le=20)
     telegram_channel_url: str | None = Field(default=None, max_length=300)
     rami_url: str | None = Field(default=None, max_length=300)
     event_rules: list[str] | None = None

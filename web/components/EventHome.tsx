@@ -566,7 +566,7 @@ export function EventHome() {
               <div style={{ fontSize: 11, color: "var(--text-dim)" }}>Живые события рейтинга</div>
             </div>
             <div className="activity-list">
-              {activity.slice(0, 6).map((act, i) => (
+              {activity.map((act, i) => (
                 <div className="activity-item" key={`${act.name}-${act.action}-${i}`}>
                   <span className="activity-text">{activityLine(act)}</span>
                   <span className="activity-time">{act.time}</span>

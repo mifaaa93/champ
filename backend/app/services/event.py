@@ -715,7 +715,7 @@ async def public_event(
             rule for rule in (cfg.get("event_rules") or [])
             if rule != "Оборот учитывается за последние 30 дней активности, если данные есть в базе."
         ],
-        "activity": _format_activity(live, now),
+        "activity": _format_activity(live, now, int(cfg.get("activity_visible") or 6)),
         "show_a": show_a,
         "show_b": show_b,
         "top_a": top_a,
@@ -1121,7 +1121,7 @@ def _public_top(
     return out
 
 
-def _format_activity(live: list[dict], now: float) -> list[dict]:
+def _format_activity(live: list[dict], now: float, limit: int = 6) -> list[dict]:
     out = []
     for row in live:
         name = str(row.get("name") or "").strip()
@@ -1141,7 +1141,7 @@ def _format_activity(live: list[dict], now: float) -> list[dict]:
                 "time": activity_time_label(float(row.get("ts") or now), now),
             }
         )
-        if len(out) >= 6:
+        if len(out) >= limit:
             break
     return out
 
