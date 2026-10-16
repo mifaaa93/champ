@@ -239,7 +239,7 @@ html.po-root body {
 }
 .activity-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
 .activity-title { font-family: Orbitron, sans-serif; font-size: 14px; color: var(--text-main); display: flex; align-items: center; gap: 10px; }
-.activity-list { display: flex; flex-direction: column; gap: 10px; max-height: 160px; overflow: hidden; }
+.activity-list { display: flex; flex-direction: column; gap: 10px; }
 .activity-item {
   display: flex; align-items: center; gap: 12px;
   padding: 10px 15px; background: rgba(0,0,0,0.2);
