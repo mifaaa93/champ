@@ -102,10 +102,13 @@ async def freeze_day(session: AsyncSession, day) -> dict:
                 )
             )
             count += 1
+    marker = await job_get(session, "day_closed")
+    days = set(marker.get("days") or [])
     if count == 0:
-        marker = await job_get(session, "day_closed")
-        days = set(marker.get("days") or [])
         days.add(str(day))
+    else:
+        days.discard(str(day))
+    if days != set(marker.get("days") or []):
         await job_set(session, "day_closed", {"days": sorted(days)})
     await session.commit()
     safe = {

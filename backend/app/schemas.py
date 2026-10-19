@@ -46,18 +46,18 @@ class RegisterIn(BaseModel):
 
 
 class ProfilePatch(BaseModel):
-    nickname: str = Field(default="", max_length=32)
-    telegram: str = Field(default="", max_length=200)
+    nickname: str | None = Field(default=None, max_length=32)
+    telegram: str | None = Field(default=None, max_length=200)
 
     @field_validator("nickname")
     @classmethod
-    def clean_nick(cls, value: str) -> str:
-        return RegisterIn.clean_nick(value)
+    def clean_nick(cls, value: str | None) -> str | None:
+        return RegisterIn.clean_nick(value) if value is not None else None
 
     @field_validator("telegram")
     @classmethod
-    def clean_tg(cls, value: str) -> str:
-        return RegisterIn.clean_tg(value)
+    def clean_tg(cls, value: str | None) -> str | None:
+        return RegisterIn.clean_tg(value) if value is not None else None
 
 
 class SettingsPatch(BaseModel):

@@ -1,4 +1,5 @@
 import time
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
@@ -27,7 +28,7 @@ async def require_admin(
     ok, retry = await limiter.allow(f"admin:{ip}", 80, 600)
     if not ok:
         raise HTTPException(status_code=429, detail=f"Слишком много попыток. {retry} с.")
-    if not x_admin_token or x_admin_token != settings.admin_token:
+    if not settings.admin_token or not x_admin_token or x_admin_token != settings.admin_token:
         raise HTTPException(status_code=401, detail="Неверный токен")
 
 
@@ -194,7 +195,7 @@ def statistics_display(cfg: dict, actual: tuple[int, float]) -> dict:
     offset = cfg.get("stats_offset") or {}
     keys = ("players", "deposits")
     return {
-        key: max(0, value + float(offset.get(key) or 0)) if cfg.get("stats_mode") == "editable" else value
+        key: round(max(0, value + float(offset.get(key) or 0)), 2) if cfg.get("stats_mode") == "editable" else round(value, 2)
         for key, value in zip(keys, actual)
     }
 
@@ -233,8 +234,14 @@ async def run_snapshot(session: AsyncSession = Depends(get_session)) -> dict:
 
 
 @router.post("/day-close", dependencies=[Depends(require_admin)])
-async def day_close(session: AsyncSession = Depends(get_session)) -> dict:
-    return await freeze_day(session, dubai_today())
+async def day_close(
+    day: date | None = Query(None), session: AsyncSession = Depends(get_session)
+) -> dict:
+    today = dubai_today()
+    requested = day or today
+    if requested not in (today, today - timedelta(days=1)):
+        raise HTTPException(400, "Можно закрыть только сегодня или вчера")
+    return await freeze_day(session, requested)
 
 
 _tg_ctx_cache: dict = {"ts": 0.0, "data": None}
@@ -368,8 +375,10 @@ async def patch_participant(
     ).scalar_one_or_none()
     if not part:
         raise HTTPException(404, "Участник не найден")
-    part.nickname = body.nickname
-    part.telegram = body.telegram
+    if body.nickname is not None:
+        part.nickname = body.nickname
+    if body.telegram is not None:
+        part.telegram = body.telegram
     await session.commit()
     return {"ok": True, "uid": uid, "nickname": part.nickname, "telegram": part.telegram}
 
@@ -393,4 +402,7 @@ async def delete_participant(uid: int, session: AsyncSession = Depends(get_sessi
         led.dq_reason = "not_registered"
     await session.delete(part)
     await session.commit()
+    from app.services.event import refresh_event_boards
+
+    await refresh_event_boards(session)
     return {"ok": True, "uid": uid, "message": "Участник удалён из чемпионата"}

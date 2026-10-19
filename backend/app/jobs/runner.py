@@ -53,7 +53,7 @@ async def job_dummy_tick() -> None:
         from app.timezone import now_champ
 
         cfg = await get_settings(session)
-        interval_m = float(cfg.get("dummy_tick_minutes") or 1)
+        interval_m = float(cfg.get("dummy_tick_minutes") if cfg.get("dummy_tick_minutes") is not None else 1)
         interval_m = max(0.5, min(interval_m, 1440))
         state = await job_get(session, "dummy_tick")
         now = now_champ()
@@ -101,7 +101,7 @@ async def telegram_board(session, day=None) -> dict:
     loss = loss_pool(rows)[:top_n]
     winners = {"yield": [], "loss": []}
     frozen = list(
-        (await session.execute(select(DayResult).where(DayResult.day == day))).scalars()
+        (await session.execute(select(DayResult).where(DayResult.day == day).order_by(DayResult.nomination, DayResult.place))).scalars()
     )
     if frozen:
         for it in frozen:
@@ -221,7 +221,7 @@ async def compose_final(session, day=None) -> tuple[str, str]:
     cfg = await get_settings(session)
     day = day or dubai_today()
     frozen = list(
-        (await session.execute(select(DayResult).where(DayResult.day == day))).scalars()
+        (await session.execute(select(DayResult).where(DayResult.day == day).order_by(DayResult.nomination, DayResult.place))).scalars()
     )
     winners: dict[str, list] = {"yield": [], "loss": []}
     source = "frozen"
@@ -334,6 +334,10 @@ async def job_freeze_and_rollover() -> None:
     async with SessionLocal() as session:
         now = now_dubai()
         if is_freeze_window(now):
+            # Collect the closing state before freezing, rather than relying on
+            # a possibly stale five-minute polling cycle.
+            await refresh_statistics(session, now.date())
+            await snapshot_watchlist(session)
             result = await freeze_day(session, now.date())
             log.info("freeze %s", result)
         if is_final_post_window(now):

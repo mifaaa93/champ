@@ -1,5 +1,7 @@
 from copy import deepcopy
 
+from sqlalchemy import func, update
+from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AppSetting
@@ -71,10 +73,15 @@ async def get_settings(session: AsyncSession) -> dict:
     if merged.get("timezone") != "Africa/Johannesburg":
         merged["timezone"] = "Africa/Johannesburg"
         changed = True
-    for key, value in list(merged.items()):
-        if isinstance(value, str) and "Dubai" in value:
-            merged[key] = value.replace("Asia/Dubai", "UTC+2").replace("Dubai", "UTC+2")
-            changed = True
+    # Migrate the legacy timezone label only in timezone-specific copy,
+    # never in arbitrary user-supplied names or Telegram templates.
+    for key in ("event_rules",):
+        value = merged.get(key)
+        if isinstance(value, list):
+            migrated = [v.replace("Asia/Dubai", "UTC+2") for v in value]
+            if migrated != value:
+                merged[key] = migrated
+                changed = True
     old_turnover_rule = "Оборот учитывается за последние 30 дней активности, если данные есть в базе."
     if old_turnover_rule in (merged.get("event_rules") or []):
         merged["event_rules"] = [rule for rule in merged["event_rules"] if rule != old_turnover_rule]
@@ -144,6 +151,7 @@ async def get_settings(session: AsyncSession) -> dict:
         changed = True
     if changed:
         row.value = merged
+        flag_modified(row, "value")
         await session.commit()
     return merged
 
@@ -195,22 +203,31 @@ def assert_saved_settings(current: dict) -> None:
 
 
 async def update_settings(session: AsyncSession, patch: dict) -> dict:
+    patch = dict(patch)
     expected = patch.pop("settings_version", None)
     current = await get_settings(session)
     if expected is not None and int(expected) != int(current.get("settings_version") or 0):
         raise ValueError("Настройки уже изменены в другой вкладке. Обнови страницу.")
+    current = deepcopy(current)
     for key, value in patch.items():
         if key not in DEFAULTS or key == "settings_version":
             continue
         current[key] = value
     assert_saved_settings(current)
     current["settings_version"] = int(current.get("settings_version") or 0) + 1
-    row = await session.get(AppSetting, SETTINGS_KEY)
-    if row is None:
-        row = AppSetting(key=SETTINGS_KEY, value=current)
-        session.add(row)
-    else:
-        row.value = current
+    previous = int(current["settings_version"]) - 1
+    result = await session.execute(
+        update(AppSetting)
+        .where(
+            AppSetting.key == SETTINGS_KEY,
+            func.coalesce(AppSetting.value["settings_version"].as_integer(), 0) == previous,
+        )
+        .values(value=current)
+        .execution_options(synchronize_session=False)
+    )
+    if result.rowcount != 1:
+        await session.rollback()
+        raise ValueError("Настройки уже изменены в другой вкладке. Обнови страницу.")
     await session.commit()
     return current
 

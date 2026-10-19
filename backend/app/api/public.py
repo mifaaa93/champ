@@ -32,9 +32,9 @@ async def trader_history(
     uid: int, request: Request, session: AsyncSession = Depends(get_session)
 ) -> dict:
     """Archived championship outcomes; lookup does not require website registration."""
-    await limit_check(request, "history")
-    if uid < 100_000_000 or uid > 9_999_999_999:
+    if uid < 100_000 or uid > 9_999_999_999:
         raise HTTPException(400, "Некорректный UID")
+    await limit_check(request, "history")
     results = (
         await session.execute(
             select(DayResult).where(DayResult.uid == uid).order_by(DayResult.day.desc())
@@ -174,18 +174,19 @@ async def register(
     cfg = await get_settings(session)
     min_dep = cfg["min_day_deposit"]
     part = await register_participant(session, body.uid, body.nickname, body.telegram)
+    registered_uid, registered_nickname = part.uid, part.nickname
     from app.services.poll import refresh_statistics, snapshot_uid
 
     try:
         await snapshot_uid(session, part.uid)
         await refresh_statistics(session)
     except Exception:
-        logging.getLogger("champ.public").exception("post-register refresh failed uid=%s", part.uid)
+        logging.getLogger("champ.public").exception("post-register refresh failed uid=%s", registered_uid)
         await session.rollback()
     return {
         "ok": True,
-        "uid": part.uid,
-        "nickname": part.nickname,
+        "uid": registered_uid,
+        "nickname": registered_nickname,
         "message": (
             f"Регистрация принята. Депозит от ${min_dep:g} за сегодняшние сутки {TZ_LABEL} "
             "попадёт в рейтинг."

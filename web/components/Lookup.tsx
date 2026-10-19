@@ -60,6 +60,7 @@ function reasonText(code: string, needDep: number, minDep: number, requireTrade:
   }
   if (code === "no_trades") return requireTrade ? "нужна хотя бы одна сделка за сегодня" : "";
   if (code === "no_start") return "депозит должен пройти, затем подожди пару минут — снимем точку 0";
+  if (code === "no_basis") return "нет базы расчёта за сегодня";
   if (code === "not_registered") return "сначала регистрация на сайте";
   if (code === "inactive") return "счёт не Active";
   if (code === "self_excluded") return "на счёте self-exclude";
@@ -101,8 +102,7 @@ function GapLines({
   if (gap.open_slot) {
     return (
       <p>
-        {label}: в просадке свободно. Нужен торговый минус
-        {gap.need_pnl ? ` от ${money(-Math.abs(gap.need_pnl))}` : ""}.
+        {label}: в просадке свободно. Достаточно перейти в торговый минус.
       </p>
     );
   }
@@ -144,7 +144,7 @@ export function Lookup() {
     setOpen(true);
     try {
       const res = await fetch(apiPath(`/public/lookup/${id}`), { cache: "no-store" });
-      const body = await res.json();
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(typeof body.detail === "string" ? body.detail : "Не удалось проверить");
       }

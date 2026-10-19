@@ -1,10 +1,24 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiPath } from "@/lib/api";
 
 const TOKEN_KEY = "ibcup_admin_token";
+
+function money(n: number) {
+  return `${n < 0 ? "-" : ""}$${Math.abs(n).toFixed(2)}`;
+}
+
+function reasonText(code: string) {
+  const labels: Record<string, string> = {
+    min_deposit: "недостаточный депозит", no_start: "нет точки старта",
+    no_basis: "нет базы расчёта", no_trades: "нет сделок",
+    not_registered: "нет регистрации", inactive: "счёт не Active",
+    self_excluded: "самоисключение",
+  };
+  return labels[code] || "вне зачёта";
+}
 
 function champWhen(iso?: string | null, withDate = false) {
   if (!iso) return "—";
@@ -66,6 +80,8 @@ export function TraderCard({ data, canEdit }: { data: TraderPayload; canEdit: bo
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const initialNickname = useRef(data.nickname || "");
+  const initialTelegram = useRef(data.telegram || "");
   const router = useRouter();
 
   async function save(e: React.FormEvent) {
@@ -82,7 +98,10 @@ export function TraderCard({ data, canEdit }: { data: TraderPayload; canEdit: bo
       const res = await fetch(apiPath(`/admin/participants/${data.uid}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json", "X-Admin-Token": token },
-        body: JSON.stringify({ nickname, telegram }),
+        body: JSON.stringify({
+          ...(nickname !== initialNickname.current ? { nickname } : {}),
+          ...(telegram !== initialTelegram.current ? { telegram } : {}),
+        }),
       });
       const body = await res.json();
       if (!res.ok) {
@@ -95,7 +114,9 @@ export function TraderCard({ data, canEdit }: { data: TraderPayload; canEdit: bo
               : "Не сохранилось";
         throw new Error(text);
       }
-      setMsg("Ник и Telegram сохранены");
+      initialNickname.current = nickname;
+      initialTelegram.current = telegram;
+      setMsg("Профиль сохранён");
     } catch (e) {
       setErr(e instanceof Error ? e.message : "ошибка");
     } finally {
@@ -120,7 +141,7 @@ export function TraderCard({ data, canEdit }: { data: TraderPayload; canEdit: bo
         </div>
         {l ? (
           <span className={`status-badge ${l.eligible ? "status-active" : "status-withdraw"}`}>
-            {l.eligible ? "в зачёте" : l.dq_reason || "вне зачёта"}
+            {l.eligible ? "в зачёте" : l.dq_reason ? l.dq_reason.split(",").map((x) => reasonText(x.trim())).join(", ") : "вне зачёта"}
           </span>
         ) : null}
       </div>
@@ -200,7 +221,7 @@ export function TraderCard({ data, canEdit }: { data: TraderPayload; canEdit: bo
             </div>
             <div className="profile-stat">
               <span>Прибыль</span>
-              <b className={pnl >= 0 ? "up" : "down"}>${pnl.toFixed(2)}</b>
+              <b className={pnl >= 0 ? "up" : "down"}>{money(pnl)}</b>
             </div>
             <div className="profile-stat">
               <span>Доходность</span>
@@ -214,8 +235,7 @@ export function TraderCard({ data, canEdit }: { data: TraderPayload; canEdit: bo
             <h3>Сегодня · {data.day} · UTC+2</h3>
             <p className="note">
               Старт ${l.start_balance.toFixed(2)} · {champWhen(l.start_ts)}. База расчёта{" "}
-              {l.basis != null ? `$${l.basis.toFixed(2)}` : "—"}. Торговый PnL $
-              {(l.trading_pnl ?? l.pnl).toFixed(2)}.
+              {l.basis != null ? money(l.basis) : "—"}. Торговый PnL {money(l.trading_pnl ?? l.pnl)}.
             </p>
             <p className="note">
               Вывод за сутки ${l.withdrawals.toFixed(2)}. Бонусы ${l.bonuses.toFixed(2)}. Сделок {l.trades ?? "—"}.

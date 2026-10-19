@@ -3,12 +3,17 @@ from pydantic import ValidationError
 
 from decimal import Decimal
 
-from app.schemas import RegisterIn, SettingsPatch, day_cash
+from app.schemas import ProfilePatch, RegisterIn, SettingsPatch, day_cash
 
 
 def test_register_rejects_tiny_uid():
     with pytest.raises(ValidationError):
         RegisterIn(uid=12)
+
+
+def test_profile_patch_preserves_omitted_field():
+    assert ProfilePatch(telegram="@rami_user").nickname is None
+    assert ProfilePatch(nickname="Иван").telegram is None
 
 
 def test_register_rejects_bad_telegram():

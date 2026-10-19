@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { apiPath } from "@/lib/api";
 import { telegramError } from "@/lib/telegramUser";
@@ -188,8 +188,13 @@ export function EventHome() {
   const [shareCopied, setShareCopied] = useState(false);
   const [lookupErr, setLookupErr] = useState("");
   const [board, setBoard] = useState<"A" | "B">("A");
+  const loadController = useRef<AbortController | null>(null);
+  const registering = useRef(false);
 
   const load = useCallback(async () => {
+    loadController.current?.abort();
+    const ctrl = new AbortController();
+    loadController.current = ctrl;
     let saved = "";
     try {
       saved = window.localStorage.getItem("po_champ_uid") || "";
@@ -200,11 +205,12 @@ export function EventHome() {
     if (/^\d{9,10}$/.test(saved)) query.set("uid", saved);
     if (/^\d{9,10}$/.test(refUid)) query.set("ref", refUid);
     const q = query.toString() ? `?${query.toString()}` : "";
-    const res = await fetch(apiPath(`/public/event${q}`), { cache: "no-store" });
+    const res = await fetch(apiPath(`/public/event${q}`), { cache: "no-store", signal: ctrl.signal });
     if (!res.ok) throw new Error("event");
     const json = (await res.json()) as EventData & { you?: Profile | null };
+    if (ctrl.signal.aborted) return;
     setData(json);
-    if (json.you && json.you.uid) setProfile(json.you);
+    setProfile(json.you?.uid ? json.you : null);
   }, []);
 
   useEffect(() => {
@@ -217,9 +223,21 @@ export function EventHome() {
   }, []);
 
   useEffect(() => {
-    void load().catch(() => setData(null));
+    if (modal !== "name") return;
+    const close = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setModal(null);
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [modal]);
+
+  useEffect(() => {
+    void load().catch(() => {});
     const id = window.setInterval(() => void load().catch(() => {}), 30000);
-    return () => window.clearInterval(id);
+    return () => {
+      loadController.current?.abort();
+      window.clearInterval(id);
+    };
   }, [load]);
 
   useEffect(() => {
@@ -281,7 +299,7 @@ export function EventHome() {
   const shareUrl =
     typeof window !== "undefined" && profile ? `${window.location.origin}/?ref=${profile.uid}` : "";
   const shareRank =
-    activeBoard === "B" ? profile?.rank_b || 0 : profile?.rank_a || profile?.rank || 0;
+    activeBoard === "B" ? profile?.rank_b || 0 : profile?.rank_a || 0;
   const shareText = profile
     ? `Я в чемпионате! Моё место ${activeBoard === "B" ? "по потерям" : "по доходности"}: ${profile.in_ranking === false || shareRank === 0 ? "пока вне этого топа" : `#${shareRank}`}, депозит: ${money(profile.dep)}. Сможешь обогнать?`
     : "";
@@ -362,6 +380,7 @@ export function EventHome() {
   }
 
   async function registerName() {
+    if (registering.current || busy) return;
     const name = regName.trim();
     const tgErr = telegramError(regTg, false);
     if (!name) {
@@ -373,6 +392,7 @@ export function EventHome() {
       return;
     }
     setRegErr("");
+    registering.current = true;
     setBusy(true);
     try {
       const res = await fetch(apiPath("/public/event/register"), {
@@ -403,6 +423,7 @@ export function EventHome() {
     } catch {
       setRegErr("Не удалось сохранить. Попробуй ещё раз.");
     } finally {
+      registering.current = false;
       setBusy(false);
     }
   }
@@ -619,8 +640,8 @@ export function EventHome() {
                 {activeBoard === "B" ? money(row.loss || Math.max(0, -(row.pnl || 0))) : pct(row.return_pct || 0)}
               </div>
               <div className="row-val deposit">{money(row.dep)}</div>
-              <div className={`row-val ${activeBoard === "B" ? ((row.return_pct || 0) >= 0 ? "profit" : "loss") : "profit"}`}>
-                {activeBoard === "B" ? pct(row.return_pct || 0) : money(Math.max(0, row.pnl || 0))}
+              <div className={`row-val ${(activeBoard === "B" ? (row.return_pct || 0) : (row.pnl || 0)) >= 0 ? "profit" : "loss"}`}>
+                {activeBoard === "B" ? pct(row.return_pct || 0) : money(row.pnl || 0)}
               </div>
             </div>
           ))}
@@ -734,9 +755,9 @@ export function EventHome() {
                 <div className="stat-row">
                   <span className="stat-label">Место по доходности</span>
                   <span className="stat-value" style={{ color: "var(--neon-green)" }}>
-                    {profile.in_ranking === false || !(profile.rank_a || profile.rank)
+                    {profile.in_ranking === false || !profile.rank_a
                       ? "вне топа"
-                      : `#${profile.rank_a || profile.rank}`}
+                      : `#${profile.rank_a}`}
                   </span>
                 </div>
               ) : null}
@@ -823,9 +844,10 @@ export function EventHome() {
         </div>
       </div>
 
-      <div className={`modal-overlay${modal === "name" ? " active" : ""}`}>
-        <div className="modal success">
+      <div className={`modal-overlay${modal === "name" ? " active" : ""}`} onClick={() => setModal(null)}>
+        <div className="modal success" onClick={(e) => e.stopPropagation()}>
           <h2>ДОБРО ПОЖАЛОВАТЬ!</h2>
+          <button type="button" className="modal-close" aria-label="Закрыть" onClick={() => setModal(null)}>×</button>
           <p>Ваш UID найден. Введите имя. Telegram можно не указывать: ссылка, @username или username.</p>
           <input
             className="modal-input"

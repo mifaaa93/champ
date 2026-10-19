@@ -1,5 +1,6 @@
 const http = require("http");
 const https = require("https");
+process.env.WEB_SOCKET_IP_STAMPED = "1";
 
 function stamp(req) {
   const raw = req.socket && req.socket.remoteAddress ? String(req.socket.remoteAddress) : "";
@@ -26,4 +27,9 @@ function wrap(create) {
 
 http.createServer = wrap(http.createServer);
 https.createServer = wrap(https.createServer);
-require("./server.js");
+if (process.argv[2] === "dev") {
+  process.argv.splice(2, 1, "dev");
+  require("./node_modules/next/dist/bin/next");
+} else {
+  require("./server.js");
+}

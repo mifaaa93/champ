@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { api, type BoardRow } from "@/lib/api";
 
 function money(n: number) {
-  const sign = n > 0 ? "+" : "";
-  return `${sign}$${n.toFixed(2)}`;
+  const sign = n > 0 ? "+" : n < 0 ? "-" : "";
+  return `${sign}$${Math.abs(n).toFixed(2)}`;
 }
 function pct(n: number) {
   const sign = n > 0 ? "+" : "";
@@ -21,15 +21,22 @@ export function Board({ initial }: { initial?: "yield" | "loss" }) {
   useEffect(() => {
     const ctrl = new AbortController();
     let dead = false;
+    let sequence = 0;
+    setRows([]);
+    setDay("");
+    setErr("");
     async function run(next: "yield" | "loss") {
+      const current = ++sequence;
       try {
         const data = await api.board(next, ctrl.signal);
-        if (dead) return;
+        if (dead || current !== sequence) return;
         setRows(data.rows);
         setDay(data.day);
         setErr("");
       } catch (e) {
-        if (dead || (e instanceof DOMException && e.name === "AbortError")) return;
+        if (dead || current !== sequence || (e instanceof DOMException && e.name === "AbortError")) return;
+        setRows([]);
+        setDay("");
         setErr(e instanceof Error ? e.message : "ошибка загрузки");
       }
     }

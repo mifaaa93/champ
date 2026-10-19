@@ -323,6 +323,7 @@ export default function AdminPage() {
     setErr("");
     try {
       const saved = (await adminFetch("/admin/settings", "PATCH", {
+        ...(tab === "telegram" ? {} : {
         top_n: Number(form.top_n),
         top_visible: Number(form.top_visible),
         min_day_deposit: Number(form.min_day_deposit),
@@ -333,6 +334,8 @@ export default function AdminPage() {
         loss_comp_cap: Number(form.loss_comp_cap),
         require_trade: Boolean(form.require_trade),
         min_return_pct: Number(form.min_return_pct),
+        }),
+        ...(tab === "telegram" ? {
         tg_hourly_header: form.tg_hourly_header,
         tg_yield_title: form.tg_yield_title,
         tg_yield_row: form.tg_yield_row,
@@ -345,6 +348,7 @@ export default function AdminPage() {
         tg_final_yield_row: form.tg_final_yield_row,
         tg_final_loss_row: form.tg_final_loss_row,
         tg_chat_id: form.tg_chat_id.trim(),
+        } : {}),
         settings_version: Number(form.settings_version || 0),
         ...(botToken.trim() ? { tg_bot_token: botToken.trim() } : {}),
       })) as Settings;
@@ -386,7 +390,7 @@ export default function AdminPage() {
   }
 
   async function freeze() {
-    if (!window.confirm("Закрыть текущие сутки? Итог нельзя пересчитать автоматически.")) return;
+    if (!window.confirm("Закрыть текущие сутки? Итог можно пересчитать вручную до отправки поста.")) return;
     setBusy("freeze");
     setErr("");
     try {

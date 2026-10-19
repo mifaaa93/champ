@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PoRoot, TraderCard, type TraderPayload } from "@/components/TraderCard";
 import { api } from "@/lib/api";
+import { headers } from "next/headers";
 import "@/app/event.css";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,13 @@ export default async function TraderPage({
     data = null;
   }
   try {
-    const response = await fetch(`${process.env.API_INTERNAL_URL || "http://127.0.0.1:8000"}/public/history/${uid}`, { cache: "no-store" });
+    const ip = process.env.WEB_SOCKET_IP_STAMPED === "1"
+      ? (await headers()).get("x-real-ip") || "unknown"
+      : "unknown";
+    const response = await fetch(`${process.env.API_INTERNAL_URL || "http://127.0.0.1:8000"}/public/history/${uid}`, {
+      cache: "no-store",
+      headers: { "X-Real-IP": ip },
+    });
     if (response.ok) history = await response.json();
   } catch { /* archive unavailable */ }
   return (

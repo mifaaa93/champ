@@ -148,6 +148,7 @@ export function EventPanel({
   section: EventSection;
 }) {
   const [form, setForm] = useState<EventForm | null>(null);
+  const [placesDraft, setPlacesDraft] = useState<string | null>(null);
   const [tops, setTops] = useState<Record<BoardKey, ShowcaseRow[]>>({ A: [], B: [] });
   const [board, setBoard] = useState<BoardKey>("A");
   const [edit, setEdit] = useState<ShowcaseRow | null>(null);
@@ -175,8 +176,8 @@ export function EventPanel({
           event_name: String(s.event_name || "PO CHAMPIONSHIP"),
           event_start: String(s.event_start || ""),
           event_end: String(s.event_end || ""),
-          event_min_deposit: Number(s.event_min_deposit || 50),
-          dummy_tick_minutes: Number(s.dummy_tick_minutes || 1),
+          event_min_deposit: Number(s.event_min_deposit ?? 50),
+          dummy_tick_minutes: Number(s.dummy_tick_minutes ?? 1),
           prize_pool: Number(s.prize_pool || 0),
           prize_table: (s.prize_table as PrizeRow[]) || [],
           telegram_channel_url: String(s.telegram_channel_url || ""),
@@ -219,6 +220,8 @@ export function EventPanel({
     onError("");
     try {
       const version = Number(form.settings_version || 0);
+      const normalizedMinDeposit = Math.max(50, Number(form.event_min_deposit) || 50);
+      const normalizedTickMinutes = Math.max(0.5, Number(form.dummy_tick_minutes) || 1);
       const body =
         section === "prizes"
           ? {
@@ -239,8 +242,8 @@ export function EventPanel({
               event_name: form.event_name,
               event_start: form.event_start,
               event_end: form.event_end,
-              event_min_deposit: Math.max(50, Number(form.event_min_deposit) || 50),
-              dummy_tick_minutes: Math.max(0.5, Number(form.dummy_tick_minutes) || 1),
+              event_min_deposit: normalizedMinDeposit,
+              dummy_tick_minutes: normalizedTickMinutes,
               telegram_channel_url: form.telegram_channel_url,
               rami_url: form.rami_url,
               event_rules: form.event_rules
@@ -255,7 +258,14 @@ export function EventPanel({
       const saved = (await adminFetch("/admin/settings", "PATCH", body)) as { settings_version?: number };
       if (saved && saved.settings_version != null) {
         const version = Number(saved.settings_version);
-        setForm((prev) => (prev ? { ...prev, settings_version: version } : prev));
+        setForm((prev) => (prev ? {
+          ...prev,
+          settings_version: version,
+          ...(section === "prizes" ? {} : {
+            event_min_deposit: normalizedMinDeposit,
+            dummy_tick_minutes: normalizedTickMinutes,
+          }),
+        } : prev));
         onVersion?.(version);
       }
       onStatus(section === "prizes" ? "Призы сохранены" : "Параметры чемпионата сохранены");
@@ -344,7 +354,7 @@ export function EventPanel({
     });
   }
 
-  const intervalSec = Math.round((Number(form.dummy_tick_minutes) || 1) * 60);
+  const intervalSec = Math.round(Number(form.dummy_tick_minutes) * 60);
   const top = tops[board];
   const lossBoard = board === "B";
 
@@ -612,19 +622,22 @@ export function EventPanel({
           </div>
           <div className="form-group">
             <label className="form-label">Число призовых мест (1–20)</label>
-            <input className="form-input" type="number" min={1} max={20} value={form.prize_places}
-              onChange={(e) => {
-                const n = Math.max(1, Math.min(20, Number(e.target.value) || 1));
-                setForm({
-                  ...form, prize_places: n,
-                  prize_yield: Array.from({ length: n }, (_, i) => form.prize_yield[i] ?? 0),
-                  prize_loss_pct: Array.from({ length: n }, (_, i) => form.prize_loss_pct[i] ?? 0),
-                  prize_table: Array.from({ length: n }, (_, i) => {
-                    const place = i + 1;
-                    const existing = form.prize_table.find((p) => p.place === `${place} место` || p.place === `${place} места`);
-                    return { place: `${place} место`, amount: existing?.amount ?? (place >= 6 && place <= 10 ? form.prize_table.find((p) => p.place.includes("6–10"))?.amount ?? 0 : 0), suffix: "" };
-                  }),
-                });
+            <input className="form-input" type="number" min={1} max={20} value={placesDraft ?? form.prize_places}
+              onChange={(e) => setPlacesDraft(e.target.value)}
+              onBlur={() => {
+                if (placesDraft !== null) {
+                  const n = Number(placesDraft);
+                  if (Number.isInteger(n) && n >= 1 && n <= 20) {
+                    setForm((prev) => prev ? {
+                      ...prev, prize_places: n,
+                      prize_yield: Array.from({ length: n }, (_, i) => prev.prize_yield[i] ?? 0),
+                      prize_loss_pct: Array.from({ length: n }, (_, i) => prev.prize_loss_pct[i] ?? 0),
+                      // Prize table has independent labels (including grouped "each" rows).
+                      prize_table: prev.prize_table,
+                    } : prev);
+                  }
+                  setPlacesDraft(null);
+                }
               }} />
             <div className="form-hint">Количество призов по доходности и компенсаций по потерям.</div>
           </div>
@@ -702,7 +715,7 @@ export function EventPanel({
             <input
               className="form-input"
               type="number"
-              min={0}
+              min={50}
               value={form.loss_comp_cap}
               onChange={(e) => setForm({ ...form, loss_comp_cap: Number(e.target.value) })}
             />
@@ -759,7 +772,7 @@ export function EventPanel({
             <input
               className="form-input"
               type="number"
-              min={50}
+              min={0}
               value={form.event_min_deposit}
               onChange={(e) => setForm({ ...form, event_min_deposit: Number(e.target.value) })}
             />

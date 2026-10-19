@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import random
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 import httpx
 from fastapi import HTTPException
@@ -134,7 +135,8 @@ def event_bounds(cfg: dict) -> tuple[datetime, datetime]:
 
 
 def min_event_deposit(cfg: dict) -> float:
-    return float(cfg.get("event_min_deposit") or cfg.get("min_day_deposit") or 50)
+    value = cfg.get("event_min_deposit")
+    return float(value if value is not None else cfg.get("min_day_deposit", 50))
 
 
 def season_dep_from_points(
@@ -149,7 +151,7 @@ def season_dep_from_points(
         return 0.0
     opening = before[-1][1] if before else upto[0][1]
     last = upto[-1][1] if upto else opening
-    return max(0.0, float(last) - float(opening))
+    return float(max(Decimal(0), Decimal(str(last)) - Decimal(str(opening))))
 
 
 def season_deposit_delta(
@@ -164,13 +166,13 @@ def season_deposit_delta(
     snapshots is known. One lifetime sum cannot be turned into a deposit.
     """
     if before is not None and latest is not None:
-        return max(0.0, float(latest) - float(before))
+        return float(max(Decimal(0), Decimal(str(latest)) - Decimal(str(before))))
     if (
         earliest is not None
         and latest is not None
         and float(latest) != float(earliest)
     ):
-        return max(0.0, float(latest) - float(earliest))
+        return float(max(Decimal(0), Decimal(str(latest)) - Decimal(str(earliest))))
     return None
 
 
@@ -269,7 +271,7 @@ def sort_by_loss(entries: list[dict]) -> list[dict]:
         entries,
         key=lambda r: (
             float(r.get("pnl") or 0),
-            float(r["trading_return_pct"]) if r.get("trading_return_pct") is not None else 0.0,
+            float(r["trading_return_pct"]) if r.get("trading_return_pct") is not None else float(r.get("return_pct") or 0),
             1 if r.get("dummy") else 0,
             int(r.get("uid") or 0),
         ),
@@ -857,7 +859,10 @@ async def real_entries(session: AsyncSession) -> list[dict]:
     start, end = event_bounds(cfg)
     through = min(now_champ(), end)
     raw_cache = await job_get(session, "event_season")
-    cache = raw_cache.get("by_uid") or {} if _season_cache_ok(raw_cache, start, end) else {}
+    # Calendar aggregates cannot prove deposits inside a partial first/last day.
+    full_days = (start.hour, start.minute, start.second, start.microsecond) == (0, 0, 0, 0)
+    full_days = full_days and (end > now_champ() or (end.hour, end.minute, end.second) == (23, 59, 59))
+    cache = (raw_cache.get("by_uid") or {}) if full_days and _season_cache_ok(raw_cache, start, end) else {}
     parts = (await session.execute(select(Participant))).scalars().all()
     uids = [p.uid for p in parts]
     opens = await _snaps_at_or_before(session, uids, start)
@@ -898,7 +903,7 @@ async def real_entries(session: AsyncSession) -> list[dict]:
             float(first.sum_deposits) if first else None,
             float(close.sum_deposits) if close else None,
         )
-        dep = stats_dep if snap_dep is None else max(stats_dep, snap_dep)
+        dep = float(max(Decimal(str(stats_dep)), Decimal(str(snap_dep or 0))))
         # Partners API does not provide a reliable turnover value for this contest.
         turn = 0.0
         pnl = float(led.contest_pnl) if led else 0.0
@@ -907,7 +912,10 @@ async def real_entries(session: AsyncSession) -> list[dict]:
         ret = float(led.return_pct) if led else 0.0
         trading_ret = float(return_pct(led.trading_pnl, led.basis)) if led else 0.0
         status = (led.status or "").strip().lower() if led else ""
-        blocked = bool(led and (led.self_excluded or (status and status != "active")))
+        blocked = bool(
+            (led and (led.self_excluded or (status and status != "active")))
+            or (trader and trader.self_excluded)
+        )
         entries.append(
             {
                 "uid": p.uid,
@@ -921,7 +929,7 @@ async def real_entries(session: AsyncSession) -> list[dict]:
                 "trading_return_pct": trading_ret,
                 "blocked": blocked,
                 "dummy": False,
-                "in_ranking": dep >= min_dep and not blocked,
+                "in_ranking": Decimal(str(dep)) >= Decimal(str(min_dep)) and not blocked,
             }
         )
     return entries
@@ -1058,9 +1066,9 @@ async def _lock_event(session: AsyncSession) -> None:
 
 
 async def refresh_event_boards(session: AsyncSession) -> tuple[list[dict], list[dict], list[dict]]:
-    board_a, board_b = await ranked_boards(session)
     await _lock_event(session)
     session.expire_all()
+    board_a, board_b = await ranked_boards(session)
     state = await job_get(session, "event_live")
     fresh = "board_a" not in state
     old_a = state.get("board_a") or ([] if fresh else state.get("board") or [])
@@ -1376,7 +1384,12 @@ async def invite_preview(session: AsyncSession, uid: int) -> dict:
     board_a, board_b, _live = await refresh_event_boards(session)
     profile = _dual_profile(board_a, board_b, uid)
     if not profile:
-        raise HTTPException(404, "not found")
+        cfg = await get_settings(session)
+        me = next((r for r in await real_entries(session) if int(r["uid"]) == uid), None)
+        profile = _unranked_profile(
+            uid, part.nickname, float(me["dep"]) if me else 0.0,
+            min_event_deposit(cfg), len(board_a),
+        )
     return {
         "uid": uid,
         "name": profile["name"],

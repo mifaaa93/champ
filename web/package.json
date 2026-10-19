@@ -2,7 +2,7 @@
   "name": "champ-web",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node with-client-ip.js dev",
     "build": "next build",
     "start": "next start -p 3000"
   },

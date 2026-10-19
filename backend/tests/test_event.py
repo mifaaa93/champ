@@ -43,6 +43,19 @@ def test_sort_by_dep_assigns_ranks():
     assert [r["uid"] for r in ranked] == [222222222, 333333333, 111111111]
 
 
+def test_season_deposit_boundary_is_exact():
+    assert season_deposit_delta(1000.10, None, 1050.10) == 50.0
+    assert season_deposit_delta(None, 50.10, 100.10) == 50.0
+
+
+def test_loss_showcase_tie_uses_visible_percent():
+    rows = sort_by_loss([
+        {"uid": -1, "dummy": True, "pnl": -80000, "return_pct": -16.6},
+        {"uid": 123456789, "dummy": False, "pnl": -80000, "trading_return_pct": -16.2},
+    ])
+    assert rows[0]["uid"] == -1
+
+
 def test_pinned_real_keeps_place_when_dummies_reorder():
     real = {"uid": 123456789, "dummy": False, "name": "real"}
     dummies = [

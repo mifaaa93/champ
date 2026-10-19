@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 function money(n: number | null | undefined) {
   if (n === null || n === undefined) return "—";
   const sign = n > 0 ? "+" : "";
-  return `${sign}$${n.toFixed(2)}`;
+  return `${n < 0 ? "-" : sign}$${Math.abs(n).toFixed(2)}`;
 }
 
 function pct(n: number | null | undefined) {

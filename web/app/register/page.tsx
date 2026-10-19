@@ -83,7 +83,7 @@ function RegisterForm() {
     <main className="wrap">
       <div className="kicker">ENTRY</div>
       <h1>Регистрация</h1>
-      <p className="lead">Укажи UID счёта. Депозит сезона от $50 попадает в рейтинг чемпионата.</p>
+      <p className="lead">Укажи UID счёта. Для участия в дневном рейтинге нужен депозит от $50 за сегодняшние сутки (UTC+2).</p>
       <form className="form card" onSubmit={onSubmit} autoComplete="off">
         <label>
           Pocket UID

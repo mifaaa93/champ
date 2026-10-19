@@ -78,7 +78,10 @@ async def refresh_statistics(session: AsyncSession, day: date | None = None) -> 
         trades = int(stats.get("count_trades") or 0)
         led = (
             await session.execute(
-                select(DayLedger).where(DayLedger.day == day, DayLedger.uid == uid)
+                select(DayLedger)
+                .where(DayLedger.day == day, DayLedger.uid == uid)
+                .with_for_update()
+                .execution_options(populate_existing=True)
             )
         ).scalar_one_or_none()
         if led is None:
@@ -148,7 +151,10 @@ async def snapshot_uid(session: AsyncSession, uid: int, day: date | None = None)
 
     led = (
         await session.execute(
-            select(DayLedger).where(DayLedger.day == day, DayLedger.uid == uid)
+        select(DayLedger)
+        .where(DayLedger.day == day, DayLedger.uid == uid)
+        .with_for_update()
+        .execution_options(populate_existing=True)
         )
     ).scalar_one_or_none()
     if led is None:

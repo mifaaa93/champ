@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     partners_token: str = ""
     partners_id: int = 815138
     partners_base_url: str = "https://pocketpartners.com"
-    admin_token: str = "change-me-long-random"
+    admin_token: str = ""
     tg_bot_token: str = ""
     tg_chat_id: str = ""
     site_public_url: str = "http://localhost:3000"

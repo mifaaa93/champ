@@ -35,8 +35,8 @@ const PAGE_SIZE = 20;
 
 function money(n: number | null) {
   if (n === null || n === undefined) return "—";
-  const sign = n > 0 ? "+" : "";
-  return `${sign}$${n.toFixed(2)}`;
+  const sign = n > 0 ? "+" : n < 0 ? "-" : "";
+  return `${sign}$${Math.abs(n).toFixed(2)}`;
 }
 
 function pct(n: number | null) {
@@ -59,8 +59,9 @@ function dubaiWhen(iso: string | null) {
 function cmp(a: ParticipantRow, b: ParticipantRow, key: SortKey, dir: number) {
   const va = a[key];
   const vb = b[key];
-  if (va === null || va === undefined) return 1 * dir;
-  if (vb === null || vb === undefined) return -1 * dir;
+  if (va == null && vb == null) return 0;
+  if (va == null) return 1;
+  if (vb == null) return -1;
   if (typeof va === "boolean" && typeof vb === "boolean") {
     return ((va ? 1 : 0) - (vb ? 1 : 0)) * dir;
   }
