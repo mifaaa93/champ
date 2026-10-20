@@ -461,6 +461,8 @@ html.po-root body {
   padding: 12px; border-radius: 10px; background: rgba(0,0,0,0.35); border: 1px solid var(--glass-border);
   color: var(--text-main); cursor: pointer; text-decoration: none;
 }
+.share-sheet a { display: flex; align-items: center; gap: 10px; }
+.share-sheet a svg { width: 18px; height: 18px; flex: 0 0 18px; }
 .share-link-box { text-align: left; margin: 16px 0 8px; }
 .share-link-box label { display: block; color: var(--text-dim); font-size: 12px; margin-bottom: 6px; }
 .share-link-row { display: flex; gap: 8px; }

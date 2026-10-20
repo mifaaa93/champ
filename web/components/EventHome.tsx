@@ -4,6 +4,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { apiPath } from "@/lib/api";
 import { telegramError } from "@/lib/telegramUser";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faFacebook,
+  faTelegram,
+  faVk,
+  faWhatsapp,
+  faXTwitter,
+} from "@fortawesome/free-brands-svg-icons";
+import { faEnvelope } from "@fortawesome/free-solid-svg-icons";
 import "@/app/event.css";
 
 type PrizeRow = { place: string; amount: number; suffix?: string };
@@ -932,26 +941,26 @@ export function EventHome() {
               target="_blank"
               rel="noreferrer"
             >
-              ✈️ Telegram
+              <FontAwesomeIcon icon={faTelegram} aria-hidden="true" /> Telegram
             </a>
             <a
               href={`https://wa.me/?text=${encodeURIComponent(`${shareText} ${shareUrl}`)}`}
               target="_blank"
               rel="noreferrer"
             >
-              🟢 WhatsApp
+              <FontAwesomeIcon icon={faWhatsapp} aria-hidden="true" /> WhatsApp
             </a>
             <a href={`https://vk.com/share.php?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer">
-              🔵 VK
+              <FontAwesomeIcon icon={faVk} aria-hidden="true" /> VK
             </a>
             <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noreferrer">
-              🔷 Facebook
+              <FontAwesomeIcon icon={faFacebook} aria-hidden="true" /> Facebook
             </a>
             <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noreferrer">
-              ⚫ X / Twitter
+              <FontAwesomeIcon icon={faXTwitter} aria-hidden="true" /> X / Twitter
             </a>
             <a href={`mailto:?subject=${encodeURIComponent(data?.name || "Чемпионат")}&body=${encodeURIComponent(`${shareText}\n${shareUrl}`)}`}>
-              ✉️ Email
+              <FontAwesomeIcon icon={faEnvelope} aria-hidden="true" /> Email
             </a>
           </div>
           <button type="button" className="modal-btn" onClick={() => setModal(null)}>
