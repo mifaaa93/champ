@@ -59,7 +59,34 @@ async def patch_settings(
 async def get_showcase(session: AsyncSession = Depends(get_session)) -> dict:
     rows_a = await list_showcase(session, "A")
     rows_b = await list_showcase(session, "B")
-    return {"rows": rows_a, "boards": {"A": rows_a, "B": rows_b}}
+    from app.services.event import ranked_boards
+
+    ranked_a, ranked_b = await ranked_boards(session)
+
+    def decorate(ranked: list[dict], raw: list[dict]) -> list[dict]:
+        by_place = {int(row["place"]): row for row in raw}
+        result = []
+        for row in ranked:
+            item = dict(row)
+            if item.get("dummy"):
+                source = by_place.get(int(item.get("showcase_place") or 0), {})
+                item["showcase_place"] = source.get("place")
+                item["randomize"] = bool(source.get("randomize", True))
+                item["hidden"] = bool(source.get("hidden", False))
+            else:
+                item["randomize"] = False
+                item["hidden"] = False
+            result.append(item)
+        return result
+
+    return {
+        "rows": rows_a,
+        "boards": {"A": rows_a, "B": rows_b},
+        "ranked": {
+            "A": decorate(ranked_a, rows_a),
+            "B": decorate(ranked_b, rows_b),
+        },
+    }
 
 
 @router.put("/showcase", dependencies=[Depends(require_admin)])
@@ -82,7 +109,34 @@ async def put_showcase(
     from app.services.event import refresh_event_boards
 
     await refresh_event_boards(session)
-    return {"rows": rows_a, "boards": {"A": rows_a, "B": rows_b}}
+    from app.services.event import ranked_boards
+
+    ranked_a, ranked_b = await ranked_boards(session)
+
+    def decorate(ranked: list[dict], raw: list[dict]) -> list[dict]:
+        by_place = {int(row["place"]): row for row in raw}
+        result = []
+        for row in ranked:
+            item = dict(row)
+            if item.get("dummy"):
+                source = by_place.get(int(item.get("showcase_place") or 0), {})
+                item["showcase_place"] = source.get("place")
+                item["randomize"] = bool(source.get("randomize", True))
+                item["hidden"] = bool(source.get("hidden", False))
+            else:
+                item["randomize"] = False
+                item["hidden"] = False
+            result.append(item)
+        return result
+
+    return {
+        "rows": rows_a,
+        "boards": {"A": rows_a, "B": rows_b},
+        "ranked": {
+            "A": decorate(ranked_a, rows_a),
+            "B": decorate(ranked_b, rows_b),
+        },
+    }
 
 
 @router.get("/real-leads", dependencies=[Depends(require_admin)])

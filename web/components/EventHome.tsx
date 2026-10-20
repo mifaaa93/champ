@@ -932,26 +932,26 @@ export function EventHome() {
               target="_blank"
               rel="noreferrer"
             >
-              Telegram
+              ✈️ Telegram
             </a>
             <a
               href={`https://wa.me/?text=${encodeURIComponent(`${shareText} ${shareUrl}`)}`}
               target="_blank"
               rel="noreferrer"
             >
-              WhatsApp
+              🟢 WhatsApp
             </a>
             <a href={`https://vk.com/share.php?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer">
-              VK
+              🔵 VK
             </a>
             <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noreferrer">
-              Facebook
+              🔷 Facebook
             </a>
             <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noreferrer">
-              X / Twitter
+              ⚫ X / Twitter
             </a>
             <a href={`mailto:?subject=${encodeURIComponent(data?.name || "Чемпионат")}&body=${encodeURIComponent(`${shareText}\n${shareUrl}`)}`}>
-              Email
+              ✉️ Email
             </a>
           </div>
           <button type="button" className="modal-btn" onClick={() => setModal(null)}>

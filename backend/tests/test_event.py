@@ -43,6 +43,18 @@ def test_sort_by_dep_assigns_ranks():
     assert [r["uid"] for r in ranked] == [222222222, 333333333, 111111111]
 
 
+def test_yield_ranking_prioritizes_profit_amount_over_percent():
+    from app.services.event import sort_by_yield
+
+    ranked = sort_by_yield(
+        [
+            {"uid": 1, "pnl": 2000, "return_pct": 200},
+            {"uid": 2, "pnl": 150, "return_pct": 300},
+        ]
+    )
+    assert [row["uid"] for row in ranked] == [1, 2]
+
+
 def test_season_deposit_boundary_is_exact():
     assert season_deposit_delta(1000.10, None, 1050.10) == 50.0
     assert season_deposit_delta(None, 50.10, 100.10) == 50.0
@@ -128,7 +140,7 @@ def test_hidden_dummy_does_not_take_place():
         [{"uid": 123456789, "name": "real", "dep": 100, "pnl": 50, "return_pct": 5}],
         "A",
     )
-    assert [r["name"] for r in ranked] == ["visible", "real"]
+    assert [r["name"] for r in ranked] == ["real", "visible"]
     assert [r["rank"] for r in ranked] == [1, 2]
 
 
@@ -313,7 +325,7 @@ def test_yield_board_ranks_by_return_and_keeps_real_on_tie():
         [{"uid": 141917235, "name": "Тест", "dep": 80, "pnl": 40, "return_pct": 10}],
         "A",
     )
-    assert [r["name"] for r in board] == ["Ахмед", "Тест", "Тимур"]
+    assert [r["name"] for r in board] == ["Ахмед", "Тимур", "Тест"]
     tied = merge_nomination(
         [{"place": 1, "name": "Ахмед", "dep": 1000, "pnl": 100, "return_pct": 10}],
         [{"uid": 141917235, "name": "Тест", "dep": 80, "pnl": 100, "return_pct": 10}],

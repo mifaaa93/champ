@@ -65,32 +65,36 @@ def _seed_row(place: int, name: str, dep: float, turn: float, pnl: float) -> dic
 
 
 DEFAULT_SHOWCASE = [
-    _seed_row(1, "Ахмед", 150000, 4500000, 12500),
-    _seed_row(2, "Равшан", 120000, 3800000, 5100),
-    _seed_row(3, "Джамшут", 95000, 2900000, 3000),
-    _seed_row(4, "Тимур", 82000, 2400000, 4800),
-    _seed_row(5, "Азамат", 74000, 2100000, 1500),
-    _seed_row(6, "Руслан", 65000, 1800000, 2250),
-    _seed_row(7, "Бахтиёр", 58000, 1500000, 2500),
-    _seed_row(8, "Фарход", 49000, 1200000, 1200),
-    _seed_row(9, "Шерзод", 42000, 950000, 600),
-    _seed_row(10, "Улугбек", 35000, 800000, 600),
+    _seed_row(1, "Ахмед", 9500, 45000, 1800),
+    _seed_row(2, "Равшан", 8200, 38000, 1400),
+    _seed_row(3, "Джамшут", 7000, 29000, 1100),
+    _seed_row(4, "Тимур", 6200, 24000, 900),
+    _seed_row(5, "Азамат", 5400, 21000, 700),
+    _seed_row(6, "Руслан", 4700, 18000, 600),
+    _seed_row(7, "Бахтиёр", 3900, 15000, 500),
+    _seed_row(8, "Фарход", 3200, 12000, 400),
+    _seed_row(9, "Шерзод", 2500, 9500, 300),
+    _seed_row(10, "Улугбек", 1800, 8000, 220),
 ]
 
 DEFAULT_SHOWCASE_B = [
-    _seed_row(1, "Нурлан", 140000, 4200000, -18000),
-    _seed_row(2, "Ерлан", 118000, 3600000, -14200),
-    _seed_row(3, "Санжар", 97000, 3100000, -11000),
-    _seed_row(4, "Бекзод", 86000, 2700000, -8900),
-    _seed_row(5, "Алишер", 76000, 2300000, -7200),
-    _seed_row(6, "Камран", 68000, 1900000, -5600),
-    _seed_row(7, "Мурат", 59000, 1600000, -4300),
-    _seed_row(8, "Ойбек", 51000, 1300000, -3100),
-    _seed_row(9, "Жасур", 44000, 1000000, -2100),
-    _seed_row(10, "Дилшод", 38000, 850000, -1400),
+    _seed_row(1, "Нурлан", 9500, 42000, -1800),
+    _seed_row(2, "Ерлан", 8200, 36000, -1500),
+    _seed_row(3, "Санжар", 7000, 31000, -1200),
+    _seed_row(4, "Бекзод", 6200, 27000, -950),
+    _seed_row(5, "Алишер", 5400, 23000, -800),
+    _seed_row(6, "Камран", 4700, 19000, -650),
+    _seed_row(7, "Мурат", 3900, 16000, -520),
+    _seed_row(8, "Ойбек", 3200, 13000, -400),
+    _seed_row(9, "Жасур", 2500, 10000, -300),
+    _seed_row(10, "Дилшод", 1800, 8500, -220),
 ]
 
 SHOWCASE_SEEDS = {"A": DEFAULT_SHOWCASE, "B": DEFAULT_SHOWCASE_B}
+DUMMY_DEP_MIN = 500.0
+DUMMY_DEP_MAX = 10_000.0
+DUMMY_PNL_MIN = 50.0
+DUMMY_PNL_MAX = 2_000.0
 
 
 def board_code(value: str | None) -> str:
@@ -257,8 +261,8 @@ def sort_by_yield(entries: list[dict]) -> list[dict]:
     ordered = sorted(
         entries,
         key=lambda r: (
-            -float(r.get("return_pct") or 0),
             -float(r.get("pnl") or 0),
+            -float(r.get("return_pct") or 0),
             1 if r.get("dummy") else 0,
             int(r.get("uid") or 0),
         ),
@@ -297,6 +301,7 @@ def merge_nomination(dummies: list[dict], reals: list[dict], board: str) -> list
                 "return_pct": float(d.get("return_pct") or 0),
                 "dummy": True,
                 "board": code,
+                "showcase_place": place,
             }
         )
     seen: set[int] = set()
@@ -569,6 +574,21 @@ def _showcase_out(row: ShowcaseLead) -> dict:
     }
 
 
+def _clamp_dummy_values(row: ShowcaseLead, board: str) -> bool:
+    """Keep generated showcase values in a believable, bounded range."""
+    dep = min(DUMMY_DEP_MAX, max(DUMMY_DEP_MIN, float(row.dep or 0)))
+    pnl = float(row.pnl or 0)
+    if board == "A":
+        pnl = min(DUMMY_PNL_MAX, max(DUMMY_PNL_MIN, pnl))
+    else:
+        pnl = -min(DUMMY_PNL_MAX, max(DUMMY_PNL_MIN, abs(pnl)))
+    changed = dep != float(row.dep or 0) or pnl != float(row.pnl or 0)
+    if changed:
+        row.dep = money(dep)
+        _sync_dummy_result(row, pnl)
+    return changed
+
+
 async def ensure_showcase(session: AsyncSession) -> None:
     added = False
     for code, seed in SHOWCASE_SEEDS.items():
@@ -594,6 +614,12 @@ async def ensure_showcase(session: AsyncSession) -> None:
                 )
             )
         added = True
+    existing = (
+        await session.execute(select(ShowcaseLead).order_by(ShowcaseLead.board, ShowcaseLead.place))
+    ).scalars().all()
+    for row in existing:
+        if bool(getattr(row, "randomize", True)):
+            added = _clamp_dummy_values(row, board_code(row.board)) or added
     if added:
         await session.commit()
 
@@ -994,17 +1020,22 @@ async def tick_showcase(session: AsyncSession, rng: random.Random | None = None)
         taken[board_code(getattr(row, "board", "A"))].add(row.name)
     changed = 0
     for row in rows:
-        if row.hidden or not bool(getattr(row, "randomize", True)):
-            continue
         code = board_code(getattr(row, "board", "A"))
         names = taken[code]
-        mutated = False
+        randomize = bool(getattr(row, "randomize", True))
+        mutated = _clamp_dummy_values(row, code) if randomize else False
+        if row.hidden or not randomize:
+            if mutated:
+                changed += 1
+            continue
         if rng.random() < 0.6:
-            row.dep = money(nudge_amount(float(row.dep), rng))
+            row.dep = money(nudge_amount(float(row.dep), rng, DUMMY_DEP_MIN, DUMMY_DEP_MAX))
             mutated = True
         if rng.random() < 0.5:
-            current = abs(float(getattr(row, "pnl", 0) or 800))
-            magnitude = nudge_amount(max(50.0, current), rng, lo=50, hi=80_000)
+            current = abs(float(getattr(row, "pnl", 0) or DUMMY_PNL_MIN))
+            magnitude = nudge_amount(
+                max(DUMMY_PNL_MIN, current), rng, lo=DUMMY_PNL_MIN, hi=DUMMY_PNL_MAX
+            )
             pnl = -magnitude if code == "B" else magnitude
             _sync_dummy_result(row, pnl)
             mutated = True

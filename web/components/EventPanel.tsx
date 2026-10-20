@@ -17,6 +17,15 @@ type ShowcaseRow = {
   hidden?: boolean;
 };
 
+type RankedRow = ShowcaseRow & {
+  rank: number;
+  dummy?: boolean;
+  showcase_place?: number;
+  trading_return_pct?: number;
+  randomize?: boolean;
+  hidden?: boolean;
+};
+
 type RealRow = {
   uid: number;
   board: BoardKey;
@@ -150,6 +159,7 @@ export function EventPanel({
   const [form, setForm] = useState<EventForm | null>(null);
   const [placesDraft, setPlacesDraft] = useState<string | null>(null);
   const [tops, setTops] = useState<Record<BoardKey, ShowcaseRow[]>>({ A: [], B: [] });
+  const [ranked, setRanked] = useState<Record<BoardKey, RankedRow[]>>({ A: [], B: [] });
   const [board, setBoard] = useState<BoardKey>("A");
   const [edit, setEdit] = useState<ShowcaseRow | null>(null);
   const [busy, setBusy] = useState("");
@@ -165,6 +175,7 @@ export function EventPanel({
         const sc = (await adminFetch("/admin/showcase")) as {
           rows: ShowcaseRow[];
           boards?: { A?: ShowcaseRow[]; B?: ShowcaseRow[] };
+          ranked?: { A?: RankedRow[]; B?: RankedRow[] };
         };
         const real = (await adminFetch("/admin/real-leads")) as { rows: RealRow[] };
         if (dead) return;
@@ -196,6 +207,7 @@ export function EventPanel({
         const packedA = packRows(sc.boards?.A || sc.rows || []);
         const packedB = packRows(sc.boards?.B || []);
         setTops({ A: packedA, B: packedB });
+        setRanked({ A: sc.ranked?.A || [], B: sc.ranked?.B || [] });
       } catch (e) {
         if (!dead) onError(e instanceof Error ? e.message : "не загрузилось");
       }
@@ -296,13 +308,17 @@ export function EventPanel({
     try {
       const saved = (await adminFetch("/admin/showcase", "PUT", {
         boards: { A: rowsPayload(tops.A), B: rowsPayload(tops.B) },
-      })) as { boards?: { A?: ShowcaseRow[]; B?: ShowcaseRow[] } };
+      })) as {
+        boards?: { A?: ShowcaseRow[]; B?: ShowcaseRow[] };
+        ranked?: { A?: RankedRow[]; B?: RankedRow[] };
+      };
       if (saved.boards) {
         setTops({
           A: packRows(saved.boards.A || tops.A),
           B: packRows(saved.boards.B || tops.B),
         });
       }
+      if (saved.ranked) setRanked({ A: saved.ranked.A || [], B: saved.ranked.B || [] });
       onStatus("Оба топа сохранены");
     } catch (err) {
       onError(err instanceof Error ? err.message : "ошибка");
@@ -356,6 +372,7 @@ export function EventPanel({
 
   const intervalSec = Math.round(Number(form.dummy_tick_minutes) * 60);
   const top = tops[board];
+  const liveTop = ranked[board];
   const lossBoard = board === "B";
 
   if (section === "top") {
@@ -382,13 +399,13 @@ export function EventPanel({
         </div>
         <div className="card">
           <div className="card-header">
-            <div className="card-title">{lossBoard ? "📉 Топ-10 потерь" : "📈 Топ-10 доходности"}</div>
+            <div className="card-title">{lossBoard ? "📉 Текущий топ потерь" : "📈 Текущий топ по прибыли"}</div>
             <span className="card-badge badge-live">● Редактируемый</span>
           </div>
           <p className="form-hint" style={{ margin: "0 0 12px" }}>
             {lossBoard
               ? "Рандомизация держит прибыль отрицательной, чтобы строка оставалась в топе потерь."
-              : "Рандомизация держит прибыль положительной. Карандаш правит имя, депозит, прибыль и доходность."}
+              : "Место считается по сумме прибыли. Рандомизация меняет только демо-лиды в заданных пределах."}
           </p>
           <div className="table-container">
             <table className="data-table">
@@ -407,10 +424,10 @@ export function EventPanel({
                 </tr>
               </thead>
               <tbody>
-                {top.map((row) => (
-                  <tr key={row.place}>
-                    <td className={`rank-cell${row.place <= 3 ? ` rank-${row.place}` : ""}`}>{row.place}</td>
-                    <td className="uid-cell">{row.uid || "—"}</td>
+                {liveTop.map((row) => (
+                  <tr key={`${row.uid}-${row.rank}`}>
+                    <td className={`rank-cell${row.rank <= 3 ? ` rank-${row.rank}` : ""}`}>{row.rank}</td>
+                    <td className="uid-cell">{row.dummy ? "—" : row.uid || "—"}</td>
                     <td className="name-cell">{row.name}</td>
                     <td>{money(row.dep)}</td>
                     <td>{money(row.balance)}</td>
@@ -419,26 +436,28 @@ export function EventPanel({
                       {row.return_pct >= 0 ? "+" : ""}
                       {row.return_pct.toFixed(1)}%
                     </td>
+                    <td>{row.dummy ? (
+                      <>
+                        <button type="button" className={`toggle-switch${row.randomize ? " active" : ""}`} aria-label="рандомизация"
+                          onClick={() => row.showcase_place && patchRow(row.showcase_place, { randomize: !row.randomize })} />
+                        <span className={`status-badge ${row.randomize ? "status-random" : "status-active"}`}>{row.randomize ? "ВКЛ" : "Выкл"}</span>
+                      </>
+                    ) : <span className="status-badge status-active">Реальный</span>}</td>
+                    <td>{row.dummy ? (
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => row.showcase_place && patchRow(row.showcase_place, { hidden: !row.hidden })}>Скрыть</button>
+                    ) : "—"}</td>
                     <td>
-                      <button
-                        type="button"
-                        className={`toggle-switch${row.randomize ? " active" : ""}`}
-                        aria-label="рандомизация"
-                        onClick={() => patchRow(row.place, { randomize: !row.randomize })}
-                      />
-                      <span className={`status-badge ${row.randomize ? "status-random" : "status-active"}`}>
-                        {row.randomize ? "ВКЛ" : "Выкл"}
-                      </span>
-                    </td>
-                    <td>
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => patchRow(row.place, { hidden: !row.hidden })}>
-                        {row.hidden ? "Показать" : "Скрыть"}
-                      </button>
-                    </td>
-                    <td>
-                      <button type="button" className="btn btn-ghost btn-icon" onClick={() => setEdit({ ...row })}>
-                        ✏️
-                      </button>
+                      {row.dummy ? (
+                        <button type="button" className="btn btn-ghost btn-icon" onClick={() => {
+                          const source = top.find((item) => item.place === row.showcase_place);
+                          if (source) setEdit({ ...source });
+                        }}>✏️</button>
+                      ) : (
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => {
+                          const real = realRows.find((item) => item.board === board && item.uid === row.uid);
+                          if (real) setRealEdit({ ...real, override: { ...real.override } });
+                        }}>✏️ Редактировать</button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -447,13 +466,30 @@ export function EventPanel({
           </div>
         </div>
         <div className="card">
-          <div className="card-header"><div className="card-title">Реальные лиды · номинация {board}</div></div>
+          <div className="card-header"><div className="card-title">Скрытые демо-лиды · номинация {board}</div></div>
           <p className="form-hint">Реальные лиды определяются по регистрации, не рандомизируются. Зафиксированное место не занимают демо-лиды; ручная правка доступна после остановки синхронизации.</p>
           <div className="table-container">
             <table className="data-table">
               <thead><tr><th>UID</th><th>Имя</th><th>Депозит</th><th>PNL</th><th>Режим</th><th>Место</th><th>Действия</th></tr></thead>
               <tbody>
-                {realRows.filter((r) => r.board === board).map((r) => (
+                {top.filter((r) => r.hidden).map((r) => (
+                  <tr key={r.uid}>
+                    <td>—</td><td>{r.name}</td><td>{money(r.dep)}</td><td>{money(r.pnl)}</td>
+                    <td>Скрыт</td><td>—</td>
+                    <td><button type="button" className="btn btn-ghost btn-sm" onClick={() => patchRow(r.place, { hidden: false })}>Показать</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div className="card">
+          <div className="card-header"><div className="card-title">Реальные лиды вне текущего топа · номинация {board}</div></div>
+          <div className="table-container">
+            <table className="data-table">
+              <thead><tr><th>UID</th><th>Имя</th><th>Депозит</th><th>PnL</th><th>Режим</th><th>Место</th><th>Действия</th></tr></thead>
+              <tbody>
+                {realRows.filter((r) => r.board === board && !liveTop.some((item) => item.uid === r.uid)).map((r) => (
                   <tr key={r.uid}>
                     <td>{r.uid}</td><td>{r.override.name ?? r.name}</td>
                     <td>{money(r.override.dep ?? r.dep)}</td><td>{money(r.override.pnl ?? r.pnl)}</td>
