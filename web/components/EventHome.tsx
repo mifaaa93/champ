@@ -598,7 +598,7 @@ export function EventHome() {
         ) : null}
 
         <h2 className="section-title">
-          {activeBoard === "B" ? `ТОП-${topLimit} ПО ПОТЕРЯМ` : `ТОП-${topLimit} ПО ДОХОДНОСТИ`}
+          {activeBoard === "B" ? `ТОП-${topLimit} ПО ПОТЕРЯМ` : `ТОП-${topLimit} ПО ПРИБЫЛИ`}
         </h2>
         {showA && showB ? (
           <div className="board-switch">
@@ -613,7 +613,7 @@ export function EventHome() {
         <p className="board-note">
           {activeBoard === "B"
             ? "Номинация B: кто потерял больше. Компенсация считается от этой потери."
-            : "Номинация A: максимальная доходность. В топ входят участники с депозитом сезона от $" + minDep + "."}
+            : "Номинация A: максимальная сумма прибыли. Процент показывается дополнительно. В топ входят участники с депозитом сезона от $" + minDep + "."}
         </p>
         <div className="top3-grid">
           {card(top3.second, "second", "2 МЕСТО", false)}
