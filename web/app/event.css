@@ -463,6 +463,12 @@ html.po-root body {
 }
 .share-sheet a { display: flex; align-items: center; gap: 10px; }
 .share-sheet a svg { width: 18px; height: 18px; flex: 0 0 18px; }
+.share-sheet .share-telegram svg { color: #26A5E4; }
+.share-sheet .share-whatsapp svg { color: #25D366; }
+.share-sheet .share-vk svg { color: #0077FF; }
+.share-sheet .share-facebook svg { color: #1877F2; }
+.share-sheet .share-x svg { color: #000000; }
+.share-sheet .share-email svg { color: var(--text-main); }
 .share-link-box { text-align: left; margin: 16px 0 8px; }
 .share-link-box label { display: block; color: var(--text-dim); font-size: 12px; margin-bottom: 6px; }
 .share-link-row { display: flex; gap: 8px; }

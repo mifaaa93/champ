@@ -937,6 +937,7 @@ export function EventHome() {
           </div>
           <div className="share-sheet">
             <a
+              className="share-telegram"
               href={`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`}
               target="_blank"
               rel="noreferrer"
@@ -944,22 +945,23 @@ export function EventHome() {
               <FontAwesomeIcon icon={faTelegram} aria-hidden="true" /> Telegram
             </a>
             <a
+              className="share-whatsapp"
               href={`https://wa.me/?text=${encodeURIComponent(`${shareText} ${shareUrl}`)}`}
               target="_blank"
               rel="noreferrer"
             >
               <FontAwesomeIcon icon={faWhatsapp} aria-hidden="true" /> WhatsApp
             </a>
-            <a href={`https://vk.com/share.php?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer">
+            <a className="share-vk" href={`https://vk.com/share.php?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(shareText)}`} target="_blank" rel="noreferrer">
               <FontAwesomeIcon icon={faVk} aria-hidden="true" /> VK
             </a>
-            <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noreferrer">
+            <a className="share-facebook" href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noreferrer">
               <FontAwesomeIcon icon={faFacebook} aria-hidden="true" /> Facebook
             </a>
-            <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noreferrer">
+            <a className="share-x" href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`} target="_blank" rel="noreferrer">
               <FontAwesomeIcon icon={faXTwitter} aria-hidden="true" /> X / Twitter
             </a>
-            <a href={`mailto:?subject=${encodeURIComponent(data?.name || "Чемпионат")}&body=${encodeURIComponent(`${shareText}\n${shareUrl}`)}`}>
+            <a className="share-email" href={`mailto:?subject=${encodeURIComponent(data?.name || "Чемпионат")}&body=${encodeURIComponent(`${shareText}\n${shareUrl}`)}`}>
               <FontAwesomeIcon icon={faEnvelope} aria-hidden="true" /> Email
             </a>
           </div>
