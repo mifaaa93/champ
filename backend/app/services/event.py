@@ -618,8 +618,9 @@ async def ensure_showcase(session: AsyncSession) -> None:
         await session.execute(select(ShowcaseLead).order_by(ShowcaseLead.board, ShowcaseLead.place))
     ).scalars().all()
     for row in existing:
-        if bool(getattr(row, "randomize", True)):
-            added = _clamp_dummy_values(row, board_code(row.board)) or added
+        # Manual values stay editable, but never leave the believable demo
+        # range used by the showcase.
+        added = _clamp_dummy_values(row, board_code(row.board)) or added
     if added:
         await session.commit()
 
