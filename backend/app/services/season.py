@@ -61,7 +61,7 @@ async def finalize_season(session: AsyncSession, at: datetime | None = None) -> 
         # a reconstructed current leaderboard as the historical final.
         await session.commit()
         return None
-    if live.get("event_end") != end.isoformat():
+    if live.get("event_end") != end.isoformat() or live.get("event_start") != start.isoformat():
         await session.commit()
         return None
     computed_at = live.get("computed_at")

@@ -53,7 +53,7 @@ async def test_finalization_only_after_end_and_never_rewrites(monkeypatch):
     start = datetime(2026, 10, 11, 8, tzinfo=timezone.utc)
     end = start + timedelta(days=14)
     cfg = {"event_name": "October", "prize_table": [], "prize_pool": 5000}
-    board = {"ranks_a": [], "ranks_b": [], "event_end": end.isoformat(),
+    board = {"ranks_a": [], "ranks_b": [], "event_start": start.isoformat(), "event_end": end.isoformat(),
              "computed_at": (end - timedelta(seconds=10)).isoformat()}
 
     async def get_settings(_session):

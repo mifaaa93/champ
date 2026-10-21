@@ -1101,7 +1101,7 @@ async def refresh_event_boards(session: AsyncSession) -> tuple[list[dict], list[
     await _lock_event(session)
     session.expire_all()
     cfg = await get_settings(session)
-    _start, end = event_bounds(cfg)
+    start, end = event_bounds(cfg)
     if now_champ() >= end:
         from app.services.season import finalize_season
 
@@ -1136,6 +1136,7 @@ async def refresh_event_boards(session: AsyncSession) -> tuple[list[dict], list[
             "ranks_b": _rank_rows(board_b),
             "activity": live,
             "event_end": end.isoformat(),
+            "event_start": start.isoformat(),
             "computed_at": now_champ().isoformat(),
         },
     )
