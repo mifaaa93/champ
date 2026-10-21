@@ -1100,6 +1100,18 @@ async def _lock_event(session: AsyncSession) -> None:
 async def refresh_event_boards(session: AsyncSession) -> tuple[list[dict], list[dict], list[dict]]:
     await _lock_event(session)
     session.expire_all()
+    cfg = await get_settings(session)
+    _start, end = event_bounds(cfg)
+    if now_champ() >= end:
+        from app.services.season import finalize_season
+
+        await finalize_season(session)
+        live = await job_get(session, "event_live")
+        return (
+            list(live.get("ranks_a") or []),
+            list(live.get("ranks_b") or []),
+            list(live.get("activity") or []),
+        )
     board_a, board_b = await ranked_boards(session)
     state = await job_get(session, "event_live")
     fresh = "board_a" not in state
@@ -1123,6 +1135,8 @@ async def refresh_event_boards(session: AsyncSession) -> tuple[list[dict], list[
             "ranks_a": _rank_rows(board_a),
             "ranks_b": _rank_rows(board_b),
             "activity": live,
+            "event_end": end.isoformat(),
+            "computed_at": now_champ().isoformat(),
         },
     )
     return board_a, board_b, live

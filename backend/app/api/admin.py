@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db import get_session
-from app.models import DayLedger, Participant, Snapshot, RealLeadOverride, Trader
+from app.models import DayLedger, Participant, SeasonResult, Snapshot, RealLeadOverride, Trader
 from app.ratelimit import client_ip, limiter
 from app.schemas import ProfilePatch, SettingsPatch, ShowcaseIn, day_cash, dec
 from app.services.event import list_showcase, save_showcase
@@ -21,6 +21,16 @@ from app.timezone import dubai_today
 router = APIRouter(prefix="/admin")
 
 
+def _season_out(row: SeasonResult) -> dict:
+    return {
+        "id": row.id,
+        "event_start": row.event_start.isoformat(),
+        "event_end": row.event_end.isoformat(),
+        "frozen_at": row.frozen_at.isoformat(),
+        **row.payload,
+    }
+
+
 async def require_admin(
     request: Request, x_admin_token: str = Header(default="")
 ) -> None:
@@ -30,6 +40,27 @@ async def require_admin(
         raise HTTPException(status_code=429, detail=f"Слишком много попыток. {retry} с.")
     if not settings.admin_token or not x_admin_token or x_admin_token != settings.admin_token:
         raise HTTPException(status_code=401, detail="Неверный токен")
+
+
+@router.get("/season-results", dependencies=[Depends(require_admin)])
+async def season_results(session: AsyncSession = Depends(get_session)) -> dict:
+    from app.services.event import event_bounds
+    from app.timezone import now_champ
+
+    cfg = await get_settings(session)
+    start, end = event_bounds(cfg)
+    rows = (await session.execute(
+        select(SeasonResult).order_by(SeasonResult.event_end.desc())
+    )).scalars().all()
+    current = next((row for row in rows if row.event_end == end), None)
+    return {
+        "current": {
+            "event_start": start.isoformat(),
+            "event_end": end.isoformat(),
+            "status": "frozen" if current else "pending" if now_champ() < end else "missing",
+        },
+        "results": [_season_out(row) for row in rows],
+    }
 
 
 @router.get("/settings", dependencies=[Depends(require_admin)])

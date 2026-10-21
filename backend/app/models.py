@@ -125,6 +125,18 @@ class DayResult(Base):
     card: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
+class SeasonResult(Base):
+    """Immutable final standings for one configured event window."""
+
+    __tablename__ = "season_results"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    event_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), unique=True, nullable=False)
+    frozen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
 class AppSetting(Base):
     __tablename__ = "app_settings"
 

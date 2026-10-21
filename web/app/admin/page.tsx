@@ -64,6 +64,28 @@ type PublicEvent = {
   show_b?: boolean;
 };
 
+type SeasonResult = {
+  id: number;
+  name: string;
+  event_start: string;
+  event_end: string;
+  frozen_at: string;
+  board_updated_at: string | null;
+  source: "last_live_board";
+  prize_pool: number;
+  prize_table: { place: string; amount: number; suffix?: string }[];
+  top_visible: number;
+  show_a: boolean;
+  show_b: boolean;
+  yield: (BoardRow & { rank: number })[];
+  loss: (BoardRow & { rank: number })[];
+};
+
+type SeasonResults = {
+  current: { event_start: string; event_end: string; status: "pending" | "frozen" | "missing" };
+  results: SeasonResult[];
+};
+
 type Tab =
   | "dashboard"
   | "participants"
@@ -74,6 +96,7 @@ type Tab =
   | "statistics"
   | "day"
   | "telegram"
+  | "season"
   | "archive";
 
 const TOKEN_KEY = "ibcup_admin_token";
@@ -117,6 +140,7 @@ const NAV: { id: Tab; icon: string; label: string; group: string }[] = [
   { id: "statistics", icon: "📈", label: "Статистика", group: "Настройки" },
   { id: "day", icon: "⏱️", label: "День", group: "Управление" },
   { id: "telegram", icon: "📱", label: "Telegram", group: "Управление" },
+  { id: "season", icon: "🏁", label: "Итоги чемпионата", group: "Аналитика" },
   { id: "archive", icon: "📁", label: "Архив", group: "Аналитика" },
 ];
 
@@ -156,6 +180,8 @@ export default function AdminPage() {
     display: { players: number; deposits: number };
   } | null>(null);
   const [statsDraft, setStatsDraft] = useState({ players: 0, deposits: 0 });
+  const [seasonResults, setSeasonResults] = useState<SeasonResults | null>(null);
+  const [selectedSeason, setSelectedSeason] = useState<number | null>(null);
 
   useEffect(() => {
     if (!status) return;
@@ -241,6 +267,23 @@ export default function AdminPage() {
       /* dashboard stays empty */
     }
   }
+
+  async function loadSeasonResults() {
+    try {
+      const data = (await adminFetch("/admin/season-results")) as SeasonResults;
+      setSeasonResults(data);
+      setSelectedSeason((previous) =>
+        data.results.some((row) => row.id === previous) ? previous : data.results[0]?.id ?? null
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Не удалось загрузить итоги");
+    }
+  }
+
+  useEffect(() => {
+    if (authed && tab === "season") void loadSeasonResults();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, tab]);
 
   async function load(tok = token) {
     setErr("");
@@ -457,6 +500,7 @@ export default function AdminPage() {
   }, [event]);
   const topA = event?.top_a || event?.top || [];
   const topB = event?.top_b || [];
+  const season = seasonResults?.results.find((row) => row.id === selectedSeason);
   const showA = event?.show_a !== false;
   const showB = event?.show_b !== false;
 
@@ -495,7 +539,7 @@ export default function AdminPage() {
     );
   }
 
-  function rankingTable(rows: BoardRow[], limit?: number) {
+  function rankingTable(rows: BoardRow[], limit?: number, final = false) {
     const list = limit ? rows.slice(0, limit) : rows;
     return (
       <div className="table-container">
@@ -521,7 +565,7 @@ export default function AdminPage() {
               list.map((row) => (
                 <tr key={row.place}>
                   <td className={`rank-cell${row.place <= 3 ? ` rank-${row.place}` : ""}`}>{row.place}</td>
-                  <td className="uid-cell">{row.dummy ? "HIDDEN" : row.uid || "—"}</td>
+                  <td className="uid-cell">{row.dummy ? (final ? "Демо" : "HIDDEN") : row.uid || "—"}</td>
                   <td className="name-cell">{row.name}</td>
                   <td>{money(row.dep)}</td>
                   <td className={(row.pnl || 0) >= 0 ? "profit-cell" : "loss-cell"}>{money(row.pnl || 0)}</td>
@@ -973,6 +1017,72 @@ export default function AdminPage() {
               </button>
             </div>
           </form>
+        </section>
+
+        <section className={`section ${tab === "season" ? "active" : ""}`}>
+          <div className="page-header">
+            <div>
+              <h1 className="page-title">Итоги чемпионата</h1>
+              <div className="page-subtitle">Неизменяемые результаты на момент завершения сезона</div>
+            </div>
+            <button type="button" className="btn btn-ghost" onClick={() => void loadSeasonResults()}>
+              🔄 Обновить
+            </button>
+          </div>
+          {seasonResults && (
+            <div className="card">
+              <p>
+                Текущий сезон заканчивается {new Date(seasonResults.current.event_end).toLocaleString("ru-RU", { timeZone: "Africa/Johannesburg" })} UTC+2.
+                {" "}Статус: {seasonResults.current.status === "frozen" ? "зафиксирован" :
+                  seasonResults.current.status === "pending" ? "идёт" : "нет сохранённых результатов"}.
+              </p>
+            </div>
+          )}
+          {seasonResults && seasonResults.results.length > 0 && (
+            <div className="card">
+              <label className="form-label" htmlFor="season-select">Выберите чемпионат</label>
+              <select id="season-select" className="form-input"
+                value={selectedSeason ?? ""}
+                onChange={(e) => setSelectedSeason(Number(e.target.value))}>
+                {seasonResults.results.map((row) => (
+                  <option key={row.id} value={row.id}>
+                    {row.name} · {new Date(row.event_end).toLocaleDateString("ru-RU")}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {season ? (
+            <>
+              <div className="card">
+                <h2>{season.name}</h2>
+                <p>Период: {new Date(season.event_start).toLocaleString("ru-RU", { timeZone: "Africa/Johannesburg" })}
+                  {" — "}{new Date(season.event_end).toLocaleString("ru-RU", { timeZone: "Africa/Johannesburg" })} UTC+2</p>
+                <p>Зафиксировано: {new Date(season.frozen_at).toLocaleString("ru-RU")}.
+                  {" "}Последнее обновление рейтинга: {season.board_updated_at
+                    ? new Date(season.board_updated_at).toLocaleString("ru-RU")
+                    : "неизвестно (старый формат)"}</p>
+                <p>Призовой пул на момент фиксации: {money(season.prize_pool)}.
+                  {" "}Таблица призов сохранена для просмотра; выплаты автоматически не производятся.</p>
+                <div className="table-container">
+                  <table className="data-table">
+                    <thead><tr><th>Место</th><th>Объявленный приз</th></tr></thead>
+                    <tbody>{season.prize_table.map((row, i) => (
+                      <tr key={i}><td>{row.place}</td><td>{money(row.amount)} {row.suffix || ""}</td></tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="card"><h2>Номинация A · прибыль</h2>
+                {rankingTable(season.yield.map((row) => ({ ...row, place: row.rank })), undefined, true)}
+              </div>
+              <div className="card"><h2>Номинация B · потери</h2>
+                {rankingTable(season.loss.map((row) => ({ ...row, place: row.rank })), undefined, true)}
+              </div>
+            </>
+          ) : <div className="card">
+            <p className="note-dim">Зафиксированных итогов пока нет. После окончания сезона worker сохранит последний рейтинг автоматически.</p>
+          </div>}
         </section>
 
         <section className={`section ${tab === "archive" ? "active" : ""}`}>

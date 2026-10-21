@@ -47,12 +47,42 @@ async def job_snapshots() -> None:
         await refresh_event_board(session)
 
 
+async def job_season_finalize() -> None:
+    """Take one fresh pre-close poll, then lock in the last published board."""
+    from app.services.event import event_bounds, refresh_event_boards
+    from app.services.season import finalize_season
+    from app.timezone import now_champ
+
+    async with SessionLocal() as session:
+        cfg = await get_settings(session)
+        _start, end = event_bounds(cfg)
+        remaining = (end - now_champ()).total_seconds()
+        if remaining <= 0:
+            await finalize_season(session)
+        elif remaining <= 120:
+            state = await job_get(session, "season_preclose")
+            if state.get("event_end") == end.isoformat():
+                return
+            await refresh_statistics(session)
+            await snapshot_watchlist(session)
+            if now_champ() < end:
+                await refresh_event_boards(session)
+                await job_set(session, "season_preclose", {"event_end": end.isoformat()})
+
+
 async def job_dummy_tick() -> None:
     async with SessionLocal() as session:
         from app.services.event import refresh_event_board, tick_showcase
         from app.timezone import now_champ
 
         cfg = await get_settings(session)
+        from app.services.event import event_bounds
+
+        if now_champ() >= event_bounds(cfg)[1]:
+            from app.services.season import finalize_season
+
+            await finalize_season(session)
+            return
         interval_m = float(cfg.get("dummy_tick_minutes") if cfg.get("dummy_tick_minutes") is not None else 1)
         interval_m = max(0.5, min(interval_m, 1440))
         state = await job_get(session, "dummy_tick")
@@ -332,6 +362,9 @@ async def job_publish(kind: str = "hourly", day=None, force: bool = False) -> di
 
 async def job_freeze_and_rollover() -> None:
     async with SessionLocal() as session:
+        from app.services.season import finalize_season
+
+        await finalize_season(session)
         now = now_dubai()
         if is_freeze_window(now):
             # Collect the closing state before freezing, rather than relying on
@@ -353,6 +386,9 @@ async def job_freeze_and_rollover() -> None:
 
 async def recover() -> None:
     async with SessionLocal() as session:
+        from app.services.season import finalize_season
+
+        await finalize_season(session)
         today = dubai_today()
         days = (
             await session.execute(
@@ -384,6 +420,7 @@ def build_scheduler() -> AsyncIOScheduler:
     scheduler.add_job(job_statistics, "interval", minutes=10, id="stats", max_instances=1)
     scheduler.add_job(job_snapshots, "interval", minutes=5, id="snaps", max_instances=1)
     scheduler.add_job(job_dummy_tick, "interval", seconds=30, id="dummies", max_instances=1)
+    scheduler.add_job(job_season_finalize, "interval", seconds=30, id="season", max_instances=1)
     scheduler.add_job(job_publish, "interval", minutes=1, id="hourly", max_instances=1)
     scheduler.add_job(
         job_freeze_and_rollover, "interval", seconds=30, id="freeze", max_instances=1
