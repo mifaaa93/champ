@@ -633,9 +633,9 @@ export function EventHome() {
           <div className="table-header">
             <div>Место</div>
             <div>Трейдер</div>
-            <div style={{ textAlign: "right" }}>{activeBoard === "B" ? "Потеря" : "Доходность"}</div>
+            <div style={{ textAlign: "right" }}>{activeBoard === "B" ? "Потеря" : "Прибыль"}</div>
             <div style={{ textAlign: "right" }}>Депозит</div>
-            <div style={{ textAlign: "right" }}>{activeBoard === "B" ? "Доходность" : "Прибыль"}</div>
+            <div style={{ textAlign: "right" }}>Доходность</div>
           </div>
           {top3.rest.map((row) => (
             <div className="table-row" key={`${activeBoard}-${row.place}`}>
@@ -645,12 +645,12 @@ export function EventHome() {
                   {row.name}{row.is_you ? " · Это вы" : row.is_friend ? " · Это ваш друг" : ""}
                 </div>
               </div>
-              <div className={`row-val ${activeBoard === "B" ? "loss" : (row.return_pct || 0) >= 0 ? "profit" : "loss"}`}>
-                {activeBoard === "B" ? money(row.loss || Math.max(0, -(row.pnl || 0))) : pct(row.return_pct || 0)}
+              <div className={`row-val ${activeBoard === "B" ? "loss" : (row.pnl || 0) >= 0 ? "profit" : "loss"}`}>
+                {activeBoard === "B" ? money(row.loss || Math.max(0, -(row.pnl || 0))) : money(row.pnl || 0)}
               </div>
               <div className="row-val deposit">{money(row.dep)}</div>
-              <div className={`row-val ${(activeBoard === "B" ? (row.return_pct || 0) : (row.pnl || 0)) >= 0 ? "profit" : "loss"}`}>
-                {activeBoard === "B" ? pct(row.return_pct || 0) : money(row.pnl || 0)}
+              <div className={`row-val ${(row.return_pct || 0) >= 0 ? "profit" : "loss"}`}>
+                {pct(row.return_pct || 0)}
               </div>
             </div>
           ))}
